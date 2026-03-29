@@ -23,18 +23,20 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             throw new IllegalArgumentException(
                     "Value must consist of digits with optional dot: " + value);
         }
-        String intPart  = m.group(1);
+        String intPart = m.group(1);
         String fracPart = m.group(2) != null ? m.group(2) : "";
         String d = stripLeadingZeros(intPart + fracPart);
-        int    s = fracPart.length();
+        int s = fracPart.length();
         // strip trailing fractional zeros (e.g. "1.50" → "1.5")
         while (s > 0 && d.charAt(d.length() - 1) == '0') {
             d = d.substring(0, d.length() - 1);
             s--;
         }
-        if (d.isEmpty()) d = "0";
+        if (d.isEmpty()) {
+            d = "0";
+        }
         this.digits = d;
-        this.scale  = s;
+        this.scale = s;
     }
 
     public StringNumeric(int value) {
@@ -46,26 +48,32 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             throw new IllegalArgumentException("Negative values are not supported yet");
         }
         this.digits = Long.toString(value);
-        this.scale  = 0;
+        this.scale = 0;
     }
 
     /**
-     * Creates a StringNumeric from a {@code double}, rounded to {@code scale} decimal places.
-     * An explicit scale is required to avoid floating-point representation surprises
-     * (e.g. {@code 0.1 + 0.2 == 0.30000000000000004}).
+     * Creates a StringNumeric from a {@code double}, rounded to {@code scale}
+     * decimal places. An explicit scale is required to avoid floating-point
+     * representation surprises (e.g. {@code 0.1 + 0.2 == 0.30000000000000004}).
      */
     public StringNumeric(double value, int scale) {
         this(formatFloating(value, scale));
     }
 
-    /** @see #StringNumeric(double, int) */
+    /**
+     * @see #StringNumeric(double, int)
+     */
     public StringNumeric(float value, int scale) {
         this(formatFloating(value, scale));
     }
 
     private static String formatFloating(double value, int scale) {
-        if (value < 0) throw new IllegalArgumentException("Negative values are not supported yet");
-        if (scale < 0) throw new IllegalArgumentException("Scale must be non-negative");
+        if (value < 0) {
+            throw new IllegalArgumentException("Negative values are not supported yet");
+        }
+        if (scale < 0) {
+            throw new IllegalArgumentException("Scale must be non-negative");
+        }
         return BigDecimal.valueOf(value)
                 .setScale(scale, RoundingMode.HALF_UP)
                 .toPlainString();
@@ -74,11 +82,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     // Private constructor used by arithmetic methods (digits/scale already normalised).
     private StringNumeric(String digits, int scale) {
         this.digits = digits;
-        this.scale  = scale;
+        this.scale = scale;
     }
 
     // --- add ---
-
     public StringNumeric add(StringNumeric other) {
         return add(other, false);
     }
@@ -87,7 +94,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         int maxScale = Math.max(this.scale, other.scale);
 
         // align decimal places: pad the shorter fractional part with trailing zeros
-        String a = this.digits  + "0".repeat(maxScale - this.scale);
+        String a = this.digits + "0".repeat(maxScale - this.scale);
         String b = other.digits + "0".repeat(maxScale - other.scale);
 
         int maxLen = Math.max(a.length(), b.length());
@@ -95,20 +102,24 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         String pb = "0".repeat(maxLen - b.length()) + b;
 
         // carryInto[k] = carry entering column k from the right (0 = units column)
-        int[] carryInto   = new int[maxLen + 1];
+        int[] carryInto = new int[maxLen + 1];
         int[] resultDigits = new int[maxLen + 1]; // [0] = potential leading digit
 
         for (int col = 0; col < maxLen; col++) {
-            int i   = maxLen - 1 - col;
+            int i = maxLen - 1 - col;
             int sum = (pa.charAt(i) - '0') + (pb.charAt(i) - '0') + carryInto[col];
             resultDigits[maxLen - col] = sum % 10;
-            carryInto[col + 1]         = sum / 10;
+            carryInto[col + 1] = sum / 10;
         }
         resultDigits[0] = carryInto[maxLen];
 
         StringBuilder sb = new StringBuilder();
-        if (resultDigits[0] > 0) sb.append((char) ('0' + resultDigits[0]));
-        for (int i = 1; i <= maxLen; i++) sb.append((char) ('0' + resultDigits[i]));
+        if (resultDigits[0] > 0) {
+            sb.append((char) ('0' + resultDigits[0]));
+        }
+        for (int i = 1; i <= maxLen; i++) {
+            sb.append((char) ('0' + resultDigits[i]));
+        }
         String resultStr = sb.toString();
 
         if (visualize) {
@@ -129,44 +140,11 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * </pre>
      */
     private static String buildAddVisualization(String aRaw, String bRaw, String resultRaw,
-                                                int[] carryInto, int maxLen, int scale) {
-        // reinsert decimal point for display only
-        String a      = insertDot(aRaw,      scale);
-        String b      = insertDot(bRaw,      scale);
-        String result = insertDot(resultRaw, scale);
-
-        int dw = Math.max(Math.max(a.length(), b.length()), result.length());
-
-        // Place each non-zero carry above the column it is being added into.
-        // Raw col → display position from right:
-        //   col <  scale : same position (dot is to the left, no shift yet)
-        //   col >= scale : +1 because the dot character sits between them
-        char[] carryChars = new char[dw];
-        Arrays.fill(carryChars, ' ');
-        for (int col = 1; col <= maxLen; col++) {
-            if (carryInto[col] > 0) {
-                int dotShift = (scale > 0 && col >= scale) ? 1 : 0;
-                int idx = dw - 1 - col - dotShift;
-                if (idx >= 0) carryChars[idx] = (char) ('0' + carryInto[col]);
-            }
-        }
-
-        String carryLine = (" " + new String(carryChars)).stripTrailing();
-
-        StringBuilder vis = new StringBuilder();
-        if (!carryLine.isBlank()) {
-            vis.append(carryLine).append('\n');
-        }
-        vis.append(' ').append(padLeft(a,      dw)).append('\n');
-        vis.append('+').append(padLeft(b,      dw)).append('\n');
-        vis.append(' ').repeat("-", dw).append('\n');
-        vis.append(' ').append(padLeft(result, dw));
-
-        return vis.toString();
+            int[] carryInto, int maxLen, int scale) {
+        return buildVisualization(aRaw, bRaw, resultRaw, carryInto, maxLen, scale, '+');
     }
 
     // --- sub ---
-
     public StringNumeric sub(StringNumeric other) {
         return sub(other, false);
     }
@@ -180,7 +158,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         int maxScale = Math.max(this.scale, other.scale);
 
         // align decimal places: pad the shorter fractional part with trailing zeros
-        String a = this.digits  + "0".repeat(maxScale - this.scale);
+        String a = this.digits + "0".repeat(maxScale - this.scale);
         String b = other.digits + "0".repeat(maxScale - other.scale);
 
         int maxLen = Math.max(a.length(), b.length());
@@ -189,10 +167,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
         // incomingBorrow[k] = borrow entering column k from the right (0 = units column)
         int[] incomingBorrow = new int[maxLen + 1];
-        int[] resultDigits   = new int[maxLen];
+        int[] resultDigits = new int[maxLen];
 
         for (int col = 0; col < maxLen; col++) {
-            int i    = maxLen - 1 - col;
+            int i = maxLen - 1 - col;
             int diff = (pa.charAt(i) - '0') - (pb.charAt(i) - '0') - incomingBorrow[col];
             if (diff < 0) {
                 diff += 10;
@@ -202,7 +180,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
 
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < maxLen; i++) sb.append((char) ('0' + resultDigits[i]));
+        for (int i = 0; i < maxLen; i++) {
+            sb.append((char) ('0' + resultDigits[i]));
+        }
         String resultStr = sb.toString();
 
         if (visualize) {
@@ -220,43 +200,56 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * -27
      *  --
      *  25
-     * </pre>
-     * The {@code 1} above a digit marks that it was borrowed from (effectively reduced by 1).
+     * </pre> The {@code 1} above a digit marks that it was borrowed from
+     * (effectively reduced by 1).
      */
     private static String buildSubVisualization(String aRaw, String bRaw, String resultRaw,
-                                                 int[] incomingBorrow, int maxLen, int scale) {
-        String a      = insertDot(aRaw,                         scale);
-        String b      = insertDot(bRaw,                         scale);
+            int[] incomingBorrow, int maxLen, int scale) {
+        return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-');
+    }
+
+    private static String buildVisualization(String aRaw, String bRaw, String resultRaw,
+            int[] marks, int maxLen, int scale, char operationSign) {
+
+        // reinsert decimal point for display only
+        String a = insertDot(aRaw, scale);
+        String b = insertDot(bRaw, scale);
         String result = insertDot(stripLeadingZeros(resultRaw), scale);
 
         int dw = Math.max(Math.max(a.length(), b.length()), result.length());
 
-        // Place a '1' above each column that was borrowed from.
-        // incomingBorrow[col] = 1 means the digit of `a` at column col was reduced by 1.
-        char[] borrowChars = new char[dw];
-        Arrays.fill(borrowChars, ' ');
+        // marks[] — це або carryInto (для додавання), або incomingBorrow (для віднімання)
+        char[] markChars = new char[dw];
+        Arrays.fill(markChars, ' ');
+
         for (int col = 1; col <= maxLen; col++) {
-            if (incomingBorrow[col] > 0) {
+            if (marks[col] > 0) {
                 int dotShift = (scale > 0 && col >= scale) ? 1 : 0;
                 int idx = dw - 1 - col - dotShift;
-                if (idx >= 0) borrowChars[idx] = '1';
+                if (idx >= 0) {
+                    if (operationSign == '+') {
+                        markChars[idx] = (char) ('0' + marks[col]);  // carry: 1, 2, ...
+                    } else {
+                        markChars[idx] = '1';                        // borrow: завжди 1
+                    }
+                }
             }
         }
 
-        String borrowLine = (" " + new String(borrowChars)).stripTrailing();
+        String markLine = (" " + new String(markChars)).stripTrailing();
 
         StringBuilder vis = new StringBuilder();
-        if (!borrowLine.isBlank()) {
-            vis.append(borrowLine).append('\n');
+        if (!markLine.isBlank()) {
+            vis.append(markLine).append('\n');
         }
-        vis.append(' ').append(padLeft(a,      dw)).append('\n');
-        vis.append('-').append(padLeft(b,      dw)).append('\n');
+
+        vis.append(' ').append(padLeft(a, dw)).append('\n');
+        vis.append(operationSign).append(padLeft(b, dw)).append('\n');
         vis.append(' ').repeat("-", dw).append('\n');
         vis.append(' ').append(padLeft(result, dw));
 
         return vis.toString();
     }
-
     // --- Number ---
 
     @Override
@@ -282,22 +275,26 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     // --- Comparable ---
-
     @Override
     public int compareTo(StringNumeric other) {
         int maxScale = Math.max(this.scale, other.scale);
-        String a = this.digits  + "0".repeat(maxScale - this.scale);
+        String a = this.digits + "0".repeat(maxScale - this.scale);
         String b = other.digits + "0".repeat(maxScale - other.scale);
-        if (a.length() != b.length()) return Integer.compare(a.length(), b.length());
+        if (a.length() != b.length()) {
+            return Integer.compare(a.length(), b.length());
+        }
         return a.compareTo(b);
     }
 
     // --- Object ---
-
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof StringNumeric sn)) return false;
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof StringNumeric sn)) {
+            return false;
+        }
         return scale == sn.scale && digits.equals(sn.digits);
     }
 
@@ -312,10 +309,14 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     // --- helpers ---
-
-    /** Inserts a decimal point {@code scale} places from the right, or returns {@code s} as-is. */
+    /**
+     * Inserts a decimal point {@code scale} places from the right, or returns
+     * {@code s} as-is.
+     */
     private static String insertDot(String s, int scale) {
-        if (scale == 0) return s;
+        if (scale == 0) {
+            return s;
+        }
         int intLen = s.length() - scale;
         if (intLen > 0) {
             return s.substring(0, intLen) + "." + s.substring(intLen);
@@ -323,26 +324,34 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return "0." + "0".repeat(-intLen) + s;
     }
 
-    /** Strips trailing fractional zeros and wraps into a StringNumeric. */
+    /**
+     * Strips trailing fractional zeros and wraps into a StringNumeric.
+     */
     private static StringNumeric normalize(String rawDigits, int scale) {
         String d = stripLeadingZeros(rawDigits);
-        int    s = scale;
+        int s = scale;
         while (s > 0 && d.charAt(d.length() - 1) == '0') {
             d = d.substring(0, d.length() - 1);
             s--;
         }
-        if (d.isEmpty()) d = "0";
+        if (d.isEmpty()) {
+            d = "0";
+        }
         return new StringNumeric(d, s);
     }
 
     private static String padLeft(String s, int width) {
-        if (s.length() >= width) return s;
+        if (s.length() >= width) {
+            return s;
+        }
         return " ".repeat(width - s.length()) + s;
     }
 
     private static String stripLeadingZeros(String s) {
         int i = 0;
-        while (i < s.length() - 1 && s.charAt(i) == '0') i++;
+        while (i < s.length() - 1 && s.charAt(i) == '0') {
+            i++;
+        }
         return s.substring(i);
     }
 }
