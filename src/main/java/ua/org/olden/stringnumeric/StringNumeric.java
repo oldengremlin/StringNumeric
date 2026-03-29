@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Arrays;
+import java.util.function.IntFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -141,7 +142,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      */
     private static String buildAddVisualization(String aRaw, String bRaw, String resultRaw,
             int[] carryInto, int maxLen, int scale) {
-        return buildVisualization(aRaw, bRaw, resultRaw, carryInto, maxLen, scale, '+');
+        return buildVisualization(aRaw, bRaw, resultRaw, carryInto, maxLen, scale, '+', carry -> (char) ('0' + carry));
     }
 
     // --- sub ---
@@ -205,11 +206,11 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      */
     private static String buildSubVisualization(String aRaw, String bRaw, String resultRaw,
             int[] incomingBorrow, int maxLen, int scale) {
-        return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-');
+        return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-', borrow -> '1');
     }
 
     private static String buildVisualization(String aRaw, String bRaw, String resultRaw,
-            int[] marks, int maxLen, int scale, char operationSign) {
+            int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
 
         // reinsert decimal point for display only
         String a = insertDot(aRaw, scale);
@@ -227,11 +228,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 int dotShift = (scale > 0 && col >= scale) ? 1 : 0;
                 int idx = dw - 1 - col - dotShift;
                 if (idx >= 0) {
-                    if (operationSign == '+') {
-                        markChars[idx] = (char) ('0' + marks[col]);  // carry: 1, 2, ...
-                    } else {
-                        markChars[idx] = '1';                        // borrow: завжди 1
-                    }
+                    markChars[idx] = markToChar.apply(marks[col]);
                 }
             }
         }
