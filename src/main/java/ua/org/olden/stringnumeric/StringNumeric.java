@@ -345,10 +345,6 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     private static String stripLeadingZeros(String s) {
-        int i = 0;
-        while (i < s.length() - 1 && s.charAt(i) == '0') {
-            i++;
-        }
-        return s.substring(i);
+        return s.replaceAll("^0+", "");
     }
 }
