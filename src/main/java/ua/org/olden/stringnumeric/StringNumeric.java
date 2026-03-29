@@ -165,6 +165,98 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return vis.toString();
     }
 
+    // --- sub ---
+
+    public StringNumeric sub(StringNumeric other) {
+        return sub(other, false);
+    }
+
+    public StringNumeric sub(StringNumeric other, boolean visualize) {
+        if (this.compareTo(other) < 0) {
+            throw new IllegalArgumentException(
+                    "Subtraction would produce a negative result, which is not supported");
+        }
+
+        int maxScale = Math.max(this.scale, other.scale);
+
+        // align decimal places: pad the shorter fractional part with trailing zeros
+        String a = this.digits  + "0".repeat(maxScale - this.scale);
+        String b = other.digits + "0".repeat(maxScale - other.scale);
+
+        int maxLen = Math.max(a.length(), b.length());
+        String pa = "0".repeat(maxLen - a.length()) + a;
+        String pb = "0".repeat(maxLen - b.length()) + b;
+
+        // incomingBorrow[k] = borrow entering column k from the right (0 = units column)
+        int[] incomingBorrow = new int[maxLen + 1];
+        int[] resultDigits   = new int[maxLen];
+
+        for (int col = 0; col < maxLen; col++) {
+            int i    = maxLen - 1 - col;
+            int diff = (pa.charAt(i) - '0') - (pb.charAt(i) - '0') - incomingBorrow[col];
+            if (diff < 0) {
+                diff += 10;
+                incomingBorrow[col + 1] = 1;
+            }
+            resultDigits[i] = diff;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < maxLen; i++) sb.append((char) ('0' + resultDigits[i]));
+        String resultStr = sb.toString();
+
+        if (visualize) {
+            System.out.println(buildSubVisualization(a, b, resultStr, incomingBorrow, maxLen, maxScale));
+        }
+
+        return normalize(resultStr, maxScale);
+    }
+
+    /**
+     * Builds a column-style visualization of subtraction, for example:
+     * <pre>
+     *  1
+     *  52
+     * -27
+     *  --
+     *  25
+     * </pre>
+     * The {@code 1} above a digit marks that it was borrowed from (effectively reduced by 1).
+     */
+    private static String buildSubVisualization(String aRaw, String bRaw, String resultRaw,
+                                                 int[] incomingBorrow, int maxLen, int scale) {
+        String a      = insertDot(aRaw,                         scale);
+        String b      = insertDot(bRaw,                         scale);
+        String result = insertDot(stripLeadingZeros(resultRaw), scale);
+
+        int dw = Math.max(Math.max(a.length(), b.length()), result.length());
+
+        // Place a '1' above each column that was borrowed from.
+        // incomingBorrow[col] = 1 means the digit of `a` at column col was reduced by 1.
+        char[] borrowChars = new char[dw];
+        Arrays.fill(borrowChars, ' ');
+        for (int col = 1; col <= maxLen; col++) {
+            if (incomingBorrow[col] > 0) {
+                int dotShift = (scale > 0 && col >= scale) ? 1 : 0;
+                int idx = dw - 1 - col - dotShift;
+                if (idx >= 0) borrowChars[idx] = '1';
+            }
+        }
+
+        String borrowLine = (" " + new String(borrowChars)).stripTrailing();
+
+        StringBuilder vis = new StringBuilder();
+        if (!borrowLine.isBlank()) {
+            vis.append(borrowLine).append('\n');
+        }
+        vis.append(' ').append(padLeft(a,      dw)).append('\n');
+        vis.append('-').append(padLeft(b,      dw)).append('\n');
+        vis.append(' ').repeat("-", dw).append('\n');
+        vis.append(' ').append(padLeft(result, dw));
+
+        return vis.toString();
+    }
+
     // --- Number ---
 
     @Override

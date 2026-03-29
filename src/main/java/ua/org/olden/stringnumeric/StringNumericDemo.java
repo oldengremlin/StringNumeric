@@ -27,6 +27,20 @@ public class StringNumericDemo {
         add("99999999999999999999", "1");
         add("99999999999999999999999999", "99999999999999999999999999");
 
+        section("Віднімання цілих");
+        sub("41",  "12");
+        sub("1000", "1");
+        sub("1111111110", "987654321");
+
+        section("Віднімання дробових");
+        sub("63.79", "15.67");
+        sub("3.75",  "1.5");
+        sub("10",    "9.99");
+        sub("1",     "0.9");
+
+        section("Числа за межами long");
+        sub("100000000000000000000", "1");
+
         section("Порівняння та рівність");
         cmp("42",   "43");
         cmp("100",  "99");
@@ -34,11 +48,18 @@ public class StringNumericDemo {
         cmp("1.50", "1.5");
 
         section("Візуалізація додавання");
-        new StringNumeric("29").add(new StringNumeric("12"),   true);
+        new StringNumeric("29").add(new StringNumeric("12"),       true);
         System.out.println();
-        new StringNumeric("99").add(new StringNumeric("1"),    true);
+        new StringNumeric("99").add(new StringNumeric("1"),        true);
         System.out.println();
         new StringNumeric("48.12").add(new StringNumeric("15.67"), true);
+
+        section("Візуалізація віднімання");
+        new StringNumeric("52").sub(new StringNumeric("27"),       true);
+        System.out.println();
+        new StringNumeric("100").sub(new StringNumeric("1"),       true);
+        System.out.println();
+        new StringNumeric("63.79").sub(new StringNumeric("15.67"), true);
     }
 
     // --- helpers ---
@@ -54,6 +75,11 @@ public class StringNumericDemo {
     private static void add(String a, String b) {
         StringNumeric result = new StringNumeric(a).add(new StringNumeric(b));
         System.out.printf("  %s + %s = %s%n", a, b, result);
+    }
+
+    private static void sub(String a, String b) {
+        StringNumeric result = new StringNumeric(a).sub(new StringNumeric(b));
+        System.out.printf("  %s - %s = %s%n", a, b, result);
     }
 
     private static void cmp(String a, String b) {
