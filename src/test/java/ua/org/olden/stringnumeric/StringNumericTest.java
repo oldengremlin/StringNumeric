@@ -146,6 +146,108 @@ class StringNumericTest {
         assertThrows(IllegalArgumentException.class, () -> new StringNumeric(1.5, -1));
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "0,   0,   0",
+        "1,   0,   1",
+        "1,   1,   0",
+        "41,  12,  29",
+        "10,  1,   9",
+        "100, 1,   99",
+        "1000,1,   999",
+        "30,  20,  10",
+        "1111111110, 987654321, 123456789"
+    })
+    void testSub(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).sub(new StringNumeric(b)).toString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "63.79, 15.67, 48.12",   // basic decimal sub
+        "3.75,  1.5,   2.25",    // different scales
+        "1,     0.9,   0.1",     // integer minus decimal
+        "10,    9.99,  0.01",    // borrow across decimal point
+        "1,     0.5,   0.5",     // result is half
+        "4,     1.50,  2.5",     // trailing zeros normalise
+        "101,   0.999, 100.001", // deep fractional borrow
+    })
+    void testSubDecimal(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).sub(new StringNumeric(b)).toString());
+    }
+
+    @Test
+    void testSubBeyondLongRange() {
+        StringNumeric result = new StringNumeric("100000000000000000000")
+                .sub(new StringNumeric("1"));
+        assertEquals("99999999999999999999", result.toString());
+    }
+
+    @Test
+    void testSubVisualizationWithBorrow() {
+        // 52 - 27 = 25, borrow from tens column
+        StringNumeric a = new StringNumeric("52");
+        StringNumeric b = new StringNumeric("27");
+
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        StringNumeric result = a.sub(b, true);
+        System.setOut(original);
+
+        assertEquals("25", result.toString());
+        assertEquals(" 1\n 52\n-27\n --\n 25", buf.toString().stripTrailing());
+    }
+
+    @Test
+    void testSubVisualizationWithChainedBorrow() {
+        // 100 - 1 = 99, borrow chain through two columns
+        StringNumeric a = new StringNumeric("100");
+        StringNumeric b = new StringNumeric("1");
+
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        StringNumeric result = a.sub(b, true);
+        System.setOut(original);
+
+        assertEquals("99", result.toString());
+        assertEquals(" 11\n 100\n-  1\n ---\n  99", buf.toString().stripTrailing());
+    }
+
+    @Test
+    void testSubVisualizationNoBorrow() {
+        // 30 - 20 = 10, no borrows
+        StringNumeric a = new StringNumeric("30");
+        StringNumeric b = new StringNumeric("20");
+
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        a.sub(b, true);
+        System.setOut(original);
+
+        assertEquals(" 30\n-20\n --\n 10", buf.toString().stripTrailing());
+    }
+
+    @Test
+    void testSubWithoutVisualizationProducesNoOutput() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("52").sub(new StringNumeric("27"));
+        new StringNumeric("52").sub(new StringNumeric("27"), false);
+        System.setOut(original);
+
+        assertTrue(buf.toString().isEmpty());
+    }
+
+    @Test
+    void testSubNegativeResultThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new StringNumeric("1").sub(new StringNumeric("2")));
+    }
+
     @Test
     void testCompareTo() {
         StringNumeric one    = new StringNumeric("1");
