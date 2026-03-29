@@ -138,13 +138,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         int dw = Math.max(Math.max(a.length(), b.length()), result.length());
 
         // Place each non-zero carry above the column it is being added into.
-        // For columns right of the dot (col <= scale) the dot character shifts idx by +1;
-        // for columns left of the dot (col > scale) there is no shift — same as integer case.
+        // Raw col → display position from right:
+        //   col <  scale : same position (dot is to the left, no shift yet)
+        //   col >= scale : +1 because the dot character sits between them
         char[] carryChars = new char[dw];
         Arrays.fill(carryChars, ' ');
         for (int col = 1; col <= maxLen; col++) {
             if (carryInto[col] > 0) {
-                int idx = col <= scale ? dw - col : dw - 1 - col;
+                int dotShift = (scale > 0 && col >= scale) ? 1 : 0;
+                int idx = dw - 1 - col - dotShift;
                 if (idx >= 0) carryChars[idx] = (char) ('0' + carryInto[col]);
             }
         }
