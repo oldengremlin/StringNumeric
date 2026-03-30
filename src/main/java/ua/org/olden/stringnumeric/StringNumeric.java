@@ -12,14 +12,17 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
     private static final Pattern VALUE_PATTERN = Pattern.compile("(\\d+)(?:\\.(\\d+))?");
 
-    private final String digits; // all significant digits without decimal point
-    private final int scale;     // number of decimal places (0 = integer)
+    private final String digits;   // all significant digits without decimal point
+    private final int scale;       // number of decimal places (0 = integer)
+    private final boolean negative; // true if value is negative (always false for zero)
 
     public StringNumeric(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("Value must not be null or blank");
         }
-        Matcher m = VALUE_PATTERN.matcher(value);
+        boolean neg = value.startsWith("-");
+        String abs = neg ? value.substring(1) : value;
+        Matcher m = VALUE_PATTERN.matcher(abs);
         if (!m.matches()) {
             throw new IllegalArgumentException(
                     "Value must consist of digits with optional dot: " + value);
@@ -29,15 +32,17 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         String d = stripLeadingZeros(intPart + fracPart);
         int s = fracPart.length();
         // strip trailing fractional zeros (e.g. "1.50" → "1.5")
-        while (s > 0 && d.charAt(d.length() - 1) == '0') {
+        while (s > 0 && !d.isEmpty() && d.charAt(d.length() - 1) == '0') {
             d = d.substring(0, d.length() - 1);
             s--;
         }
         if (d.isEmpty()) {
             d = "0";
+            s = 0;
         }
         this.digits = d;
         this.scale = s;
+        this.negative = neg && !d.equals("0"); // -0 normalises to 0
     }
 
     public StringNumeric(int value) {
@@ -45,10 +50,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     public StringNumeric(long value) {
-        if (value < 0) {
-            throw new IllegalArgumentException("Negative values are not supported yet");
-        }
-        this.digits = Long.toString(value);
+        this.negative = value < 0;
+        this.digits = Long.toString(Math.abs(value));
         this.scale = 0;
     }
 
@@ -69,21 +72,32 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     private static String formatFloating(double value, int scale) {
-        if (value < 0) {
-            throw new IllegalArgumentException("Negative values are not supported yet");
-        }
         if (scale < 0) {
             throw new IllegalArgumentException("Scale must be non-negative");
         }
-        return BigDecimal.valueOf(value)
+        String plain = BigDecimal.valueOf(Math.abs(value))
                 .setScale(scale, RoundingMode.HALF_UP)
                 .toPlainString();
+        return value < 0 ? "-" + plain : plain;
     }
 
-    // Private constructor used by arithmetic methods (digits/scale already normalised).
-    private StringNumeric(String digits, int scale) {
+    // Private constructor — digits/scale/negative already normalised.
+    private StringNumeric(String digits, int scale, boolean negative) {
         this.digits = digits;
         this.scale = scale;
+        this.negative = negative;
+    }
+
+    // --- sign helpers ---
+
+    /** Returns a new value with the sign flipped; negate(0) == 0. */
+    public StringNumeric negate() {
+        if (isZero()) return this;
+        return new StringNumeric(digits, scale, !negative);
+    }
+
+    public boolean isZero() {
+        return digits.equals("0"); // after normalisation zero always has scale == 0
     }
 
     // --- add ---
@@ -92,15 +106,34 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     public StringNumeric add(StringNumeric other, boolean visualize) {
-        int maxScale = Math.max(this.scale, other.scale);
+        if (this.negative == other.negative) {
+            // same sign: add magnitudes, keep sign
+            StringNumeric mag = addMagnitudes(this, other, visualize);
+            return (this.negative && !mag.isZero())
+                    ? new StringNumeric(mag.digits, mag.scale, true)
+                    : mag;
+        }
+        // different signs: subtract smaller magnitude from larger
+        int cmp = compareMagnitudes(this, other);
+        if (cmp == 0) return new StringNumeric("0", 0, false);
+        StringNumeric larger  = cmp > 0 ? this  : other;
+        StringNumeric smaller = cmp > 0 ? other : this;
+        StringNumeric mag = subMagnitudes(larger, smaller, visualize);
+        return (larger.negative && !mag.isZero())
+                ? new StringNumeric(mag.digits, mag.scale, true)
+                : mag;
+    }
 
-        // align decimal places: pad the shorter fractional part with trailing zeros
-        String a = this.digits + "0".repeat(maxScale - this.scale);
-        String b = other.digits + "0".repeat(maxScale - other.scale);
+    private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        int maxScale = Math.max(a.scale, b.scale);
 
-        int maxLen = Math.max(a.length(), b.length());
-        String pa = "0".repeat(maxLen - a.length()) + a;
-        String pb = "0".repeat(maxLen - b.length()) + b;
+        // align decimal places
+        String as = a.digits + "0".repeat(maxScale - a.scale);
+        String bs = b.digits + "0".repeat(maxScale - b.scale);
+
+        int maxLen = Math.max(as.length(), bs.length());
+        String pa = "0".repeat(maxLen - as.length()) + as;
+        String pb = "0".repeat(maxLen - bs.length()) + bs;
 
         // carryInto[k] = carry entering column k from the right (0 = units column)
         int[] carryInto = new int[maxLen + 1];
@@ -124,7 +157,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         String resultStr = sb.toString();
 
         if (visualize) {
-            System.out.println(buildAddVisualization(a, b, resultStr, carryInto, maxLen, maxScale));
+            System.out.println(buildAddVisualization(as, bs, resultStr, carryInto, maxLen, maxScale));
         }
 
         return normalize(resultStr, maxScale);
@@ -150,21 +183,26 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return sub(other, false);
     }
 
+    /**
+     * Subtracts {@code other} from this value. The result may be negative.
+     * Delegates to {@code add(other.negate(), visualize)}, so the visualization
+     * shows the underlying magnitude operation (addition or subtraction).
+     */
     public StringNumeric sub(StringNumeric other, boolean visualize) {
-        if (this.compareTo(other) < 0) {
-            throw new IllegalArgumentException(
-                    "Subtraction would produce a negative result, which is not supported");
-        }
+        return add(other.negate(), visualize);
+    }
 
-        int maxScale = Math.max(this.scale, other.scale);
+    private static StringNumeric subMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        // precondition: |a| >= |b|
+        int maxScale = Math.max(a.scale, b.scale);
 
-        // align decimal places: pad the shorter fractional part with trailing zeros
-        String a = this.digits + "0".repeat(maxScale - this.scale);
-        String b = other.digits + "0".repeat(maxScale - other.scale);
+        // align decimal places
+        String as = a.digits + "0".repeat(maxScale - a.scale);
+        String bs = b.digits + "0".repeat(maxScale - b.scale);
 
-        int maxLen = Math.max(a.length(), b.length());
-        String pa = "0".repeat(maxLen - a.length()) + a;
-        String pb = "0".repeat(maxLen - b.length()) + b;
+        int maxLen = Math.max(as.length(), bs.length());
+        String pa = "0".repeat(maxLen - as.length()) + as;
+        String pb = "0".repeat(maxLen - bs.length()) + bs;
 
         // incomingBorrow[k] = borrow entering column k from the right (0 = units column)
         int[] incomingBorrow = new int[maxLen + 1];
@@ -187,7 +225,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         String resultStr = sb.toString();
 
         if (visualize) {
-            System.out.println(buildSubVisualization(a, b, resultStr, incomingBorrow, maxLen, maxScale));
+            System.out.println(buildSubVisualization(as, bs, resultStr, incomingBorrow, maxLen, maxScale));
         }
 
         return normalize(resultStr, maxScale);
@@ -247,6 +285,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
         return vis.toString();
     }
+
     // --- Number ---
 
     @Override
@@ -256,9 +295,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
     @Override
     public long longValue() {
-        return new BigInteger(digits)
+        long abs = new BigInteger(digits)
                 .divide(BigInteger.TEN.pow(scale))
                 .longValueExact();
+        return negative ? -abs : abs;
     }
 
     @Override
@@ -274,13 +314,21 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     // --- Comparable ---
     @Override
     public int compareTo(StringNumeric other) {
-        int maxScale = Math.max(this.scale, other.scale);
-        String a = this.digits + "0".repeat(maxScale - this.scale);
-        String b = other.digits + "0".repeat(maxScale - other.scale);
-        if (a.length() != b.length()) {
-            return Integer.compare(a.length(), b.length());
+        if (this.negative != other.negative) {
+            return this.negative ? -1 : 1;
         }
-        return a.compareTo(b);
+        int cmp = compareMagnitudes(this, other);
+        return this.negative ? -cmp : cmp; // for negatives: larger magnitude is smaller value
+    }
+
+    private static int compareMagnitudes(StringNumeric a, StringNumeric b) {
+        int maxScale = Math.max(a.scale, b.scale);
+        String as = a.digits + "0".repeat(maxScale - a.scale);
+        String bs = b.digits + "0".repeat(maxScale - b.scale);
+        if (as.length() != bs.length()) {
+            return Integer.compare(as.length(), bs.length());
+        }
+        return as.compareTo(bs);
     }
 
     // --- Object ---
@@ -292,17 +340,18 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         if (!(o instanceof StringNumeric sn)) {
             return false;
         }
-        return scale == sn.scale && digits.equals(sn.digits);
+        return negative == sn.negative && scale == sn.scale && digits.equals(sn.digits);
     }
 
     @Override
     public int hashCode() {
-        return 31 * digits.hashCode() + scale;
+        return 31 * (31 * digits.hashCode() + scale) + Boolean.hashCode(negative);
     }
 
     @Override
     public String toString() {
-        return insertDot(digits, scale);
+        String abs = insertDot(digits, scale);
+        return negative ? "-" + abs : abs;
     }
 
     // --- helpers ---
@@ -322,19 +371,21 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     /**
-     * Strips trailing fractional zeros and wraps into a StringNumeric.
+     * Strips trailing fractional zeros, strips leading zeros, and wraps into a
+     * StringNumeric. Always returns a non-negative result; the caller applies
+     * the sign.
      */
     private static StringNumeric normalize(String rawDigits, int scale) {
         String d = stripLeadingZeros(rawDigits);
         int s = scale;
-        while (s > 0 && d.charAt(d.length() - 1) == '0') {
+        while (s > 0 && !d.isEmpty() && d.charAt(d.length() - 1) == '0') {
             d = d.substring(0, d.length() - 1);
             s--;
         }
         if (d.isEmpty()) {
-            d = "0";
+            return new StringNumeric("0", 0, false);
         }
-        return new StringNumeric(d, s);
+        return new StringNumeric(d, s, false);
     }
 
     private static String padLeft(String s, int width) {

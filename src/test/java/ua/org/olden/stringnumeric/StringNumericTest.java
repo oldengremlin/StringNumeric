@@ -11,6 +11,8 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class StringNumericTest {
 
+    // ── add (positive) ───────────────────────────────────────────────────────
+
     @ParameterizedTest
     @CsvSource({
         "0, 0, 0",
@@ -43,22 +45,38 @@ class StringNumericTest {
 
     @Test
     void testAddBeyondLongRange() {
-        // 20-digit numbers — well beyond long/BigInteger convenience range
         StringNumeric result = new StringNumeric("99999999999999999999")
                 .add(new StringNumeric("1"));
         assertEquals("100000000000000000000", result.toString());
     }
 
+    // ── add (negative) ────────────────────────────────────────────────────────
+
+    @ParameterizedTest
+    @CsvSource({
+        "-1,   -2,   -3",     // both negative
+        "-5,    3,   -2",     // |negative| > |positive|
+        " 3,   -5,   -2",     // |positive| < |negative|
+        "-5,    5,    0",     // cancel out
+        "-0.5,  0.5,  0",     // decimal cancel
+        "-1.5,  1,   -0.5",   // decimal mixed
+        " 1,   -1.5, -0.5",
+        "-10,   3,   -7",
+        " 7,  -10,   -3",
+    })
+    void testAddWithNegatives(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).add(new StringNumeric(b.strip())).toString());
+    }
+
+    // ── add visualization ─────────────────────────────────────────────────────
+
     @Test
     void testAddVisualizationWithCarry() {
-        // 29 + 12 = 41, carry from units to tens
-        StringNumeric a = new StringNumeric("29");
-        StringNumeric b = new StringNumeric("12");
-
         PrintStream original = System.out;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         System.setOut(new PrintStream(buf));
-        StringNumeric result = a.add(b, true);
+        StringNumeric result = new StringNumeric("29").add(new StringNumeric("12"), true);
         System.setOut(original);
 
         assertEquals("41", result.toString());
@@ -67,14 +85,10 @@ class StringNumericTest {
 
     @Test
     void testAddVisualizationWithChainedCarry() {
-        // 99 + 1 = 100, carry chain propagates through two columns
-        StringNumeric a = new StringNumeric("99");
-        StringNumeric b = new StringNumeric("1");
-
         PrintStream original = System.out;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         System.setOut(new PrintStream(buf));
-        StringNumeric result = a.add(b, true);
+        StringNumeric result = new StringNumeric("99").add(new StringNumeric("1"), true);
         System.setOut(original);
 
         assertEquals("100", result.toString());
@@ -83,17 +97,12 @@ class StringNumericTest {
 
     @Test
     void testAddVisualizationNoCarry() {
-        // 10 + 20 = 30, no carries at all
-        StringNumeric a = new StringNumeric("10");
-        StringNumeric b = new StringNumeric("20");
-
         PrintStream original = System.out;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         System.setOut(new PrintStream(buf));
-        a.add(b, true);
+        new StringNumeric("10").add(new StringNumeric("20"), true);
         System.setOut(original);
 
-        // No carry line expected
         assertEquals(" 10\n+20\n --\n 30", buf.toString().stripTrailing());
     }
 
@@ -109,42 +118,7 @@ class StringNumericTest {
         assertTrue(buf.toString().isEmpty());
     }
 
-    @Test
-    void testConstructorStripsLeadingZeros() {
-        assertEquals("42", new StringNumeric("0042").toString());
-        assertEquals("0", new StringNumeric("0").toString());
-        assertEquals("0", new StringNumeric("000").toString());
-    }
-
-    @Test
-    void testConstructorDecimal() {
-        assertEquals("48.12", new StringNumeric("48.12").toString());
-        assertEquals("0.5",   new StringNumeric("0.5").toString());
-        assertEquals("1.5",   new StringNumeric("1.50").toString());   // trailing zero stripped
-        assertEquals("5",     new StringNumeric("5.00").toString());   // all fractional zeros → integer
-    }
-
-    @Test
-    void testConstructorNumericTypes() {
-        assertEquals("42",   new StringNumeric(42).toString());
-        assertEquals("42",   new StringNumeric(42L).toString());
-        assertEquals("3.14", new StringNumeric(3.14159, 2).toString());   // rounded to 2 places
-        assertEquals("3.14", new StringNumeric(3.14159f, 2).toString());
-        assertEquals("1",    new StringNumeric(0.999, 0).toString());     // rounds to 1
-        assertEquals("3",    new StringNumeric(3.0, 2).toString());       // trailing zeros stripped
-    }
-
-    @Test
-    void testConstructorRejectsInvalidInput() {
-        assertThrows(IllegalArgumentException.class, () -> new StringNumeric(""));
-        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("12a3"));
-        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("12.a3"));
-        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("5."));
-        assertThrows(IllegalArgumentException.class, () -> new StringNumeric((String) null));
-        assertThrows(IllegalArgumentException.class, () -> new StringNumeric(-1L));
-        assertThrows(IllegalArgumentException.class, () -> new StringNumeric(-1.5, 2));
-        assertThrows(IllegalArgumentException.class, () -> new StringNumeric(1.5, -1));
-    }
+    // ── sub (positive) ────────────────────────────────────────────────────────
 
     @ParameterizedTest
     @CsvSource({
@@ -183,16 +157,32 @@ class StringNumericTest {
         assertEquals("99999999999999999999", result.toString());
     }
 
+    // ── sub (negative results & negative operands) ────────────────────────────
+
+    @ParameterizedTest
+    @CsvSource({
+        " 1,   2,   -1",     // positive result flips sign
+        " 0,   5,   -5",
+        " 1.5, 3,   -1.5",   // decimal
+        "-5,  -3,   -2",     // both negative: -5 - (-3) = -5 + 3 = -2
+        "-3,  -5,    2",     // -3 - (-5) = -3 + 5 = 2
+        "-1,   2,   -3",     // negative minus positive
+        " 5,  -3,    8",     // positive minus negative = sum
+        " 1.5,-1.5,  3",
+    })
+    void testSubWithNegatives(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).sub(new StringNumeric(b.strip())).toString());
+    }
+
+    // ── sub visualization ─────────────────────────────────────────────────────
+
     @Test
     void testSubVisualizationWithBorrow() {
-        // 52 - 27 = 25, borrow from tens column
-        StringNumeric a = new StringNumeric("52");
-        StringNumeric b = new StringNumeric("27");
-
         PrintStream original = System.out;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         System.setOut(new PrintStream(buf));
-        StringNumeric result = a.sub(b, true);
+        StringNumeric result = new StringNumeric("52").sub(new StringNumeric("27"), true);
         System.setOut(original);
 
         assertEquals("25", result.toString());
@@ -201,14 +191,10 @@ class StringNumericTest {
 
     @Test
     void testSubVisualizationWithChainedBorrow() {
-        // 100 - 1 = 99, borrow chain through two columns
-        StringNumeric a = new StringNumeric("100");
-        StringNumeric b = new StringNumeric("1");
-
         PrintStream original = System.out;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         System.setOut(new PrintStream(buf));
-        StringNumeric result = a.sub(b, true);
+        StringNumeric result = new StringNumeric("100").sub(new StringNumeric("1"), true);
         System.setOut(original);
 
         assertEquals("99", result.toString());
@@ -217,14 +203,10 @@ class StringNumericTest {
 
     @Test
     void testSubVisualizationNoBorrow() {
-        // 30 - 20 = 10, no borrows
-        StringNumeric a = new StringNumeric("30");
-        StringNumeric b = new StringNumeric("20");
-
         PrintStream original = System.out;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         System.setOut(new PrintStream(buf));
-        a.sub(b, true);
+        new StringNumeric("30").sub(new StringNumeric("20"), true);
         System.setOut(original);
 
         assertEquals(" 30\n-20\n --\n 10", buf.toString().stripTrailing());
@@ -243,10 +225,78 @@ class StringNumericTest {
     }
 
     @Test
-    void testSubNegativeResultThrows() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new StringNumeric("1").sub(new StringNumeric("2")));
+    void testSubProducesNegativeResult() {
+        assertEquals("-1", new StringNumeric("1").sub(new StringNumeric("2")).toString());
+        assertEquals("-0.5", new StringNumeric("0.5").sub(new StringNumeric("1")).toString());
     }
+
+    // ── constructors ──────────────────────────────────────────────────────────
+
+    @Test
+    void testConstructorStripsLeadingZeros() {
+        assertEquals("42", new StringNumeric("0042").toString());
+        assertEquals("0", new StringNumeric("0").toString());
+        assertEquals("0", new StringNumeric("000").toString());
+    }
+
+    @Test
+    void testConstructorDecimal() {
+        assertEquals("48.12", new StringNumeric("48.12").toString());
+        assertEquals("0.5",   new StringNumeric("0.5").toString());
+        assertEquals("1.5",   new StringNumeric("1.50").toString());   // trailing zero stripped
+        assertEquals("5",     new StringNumeric("5.00").toString());   // all fractional zeros → integer
+    }
+
+    @Test
+    void testConstructorNumericTypes() {
+        assertEquals("42",   new StringNumeric(42).toString());
+        assertEquals("42",   new StringNumeric(42L).toString());
+        assertEquals("3.14", new StringNumeric(3.14159, 2).toString());   // rounded to 2 places
+        assertEquals("3.14", new StringNumeric(3.14159f, 2).toString());
+        assertEquals("1",    new StringNumeric(0.999, 0).toString());     // rounds to 1
+        assertEquals("3",    new StringNumeric(3.0, 2).toString());       // trailing zeros stripped
+    }
+
+    @Test
+    void testConstructorNegativeString() {
+        assertEquals("-42",   new StringNumeric("-42").toString());
+        assertEquals("-3.14", new StringNumeric("-3.14").toString());
+        assertEquals("-0.5",  new StringNumeric("-0.5").toString());
+        assertEquals("0",     new StringNumeric("-0").toString());   // -0 normalises to 0
+        assertEquals("0",     new StringNumeric("-0.00").toString());
+    }
+
+    @Test
+    void testConstructorNegativeNumericTypes() {
+        assertEquals("-42",   new StringNumeric(-42).toString());
+        assertEquals("-42",   new StringNumeric(-42L).toString());
+        assertEquals("-3.14", new StringNumeric(-3.14159, 2).toString());
+        assertEquals("-3.14", new StringNumeric(-3.14159f, 2).toString());
+        assertEquals("0",     new StringNumeric(-0L).toString());    // -0 normalises to 0
+    }
+
+    @Test
+    void testConstructorRejectsInvalidInput() {
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric(""));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("12a3"));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("12.a3"));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("5."));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric((String) null));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric(1.5, -1));
+    }
+
+    // ── negate ────────────────────────────────────────────────────────────────
+
+    @Test
+    void testNegate() {
+        assertEquals("-5",  new StringNumeric("5").negate().toString());
+        assertEquals("5",   new StringNumeric("-5").negate().toString());
+        assertEquals("0",   new StringNumeric("0").negate().toString());   // negate(0) == 0
+        assertEquals("-0.5", new StringNumeric("0.5").negate().toString());
+        assertEquals("0.5", new StringNumeric("-0.5").negate().toString());
+    }
+
+    // ── compareTo ─────────────────────────────────────────────────────────────
 
     @Test
     void testCompareTo() {
@@ -262,18 +312,52 @@ class StringNumericTest {
     }
 
     @Test
+    void testCompareToWithNegatives() {
+        StringNumeric negFive  = new StringNumeric("-5");
+        StringNumeric negThree = new StringNumeric("-3");
+        StringNumeric three    = new StringNumeric("3");
+
+        assertTrue(negFive.compareTo(three) < 0);    // -5 < 3
+        assertTrue(negFive.compareTo(negThree) < 0); // -5 < -3
+        assertTrue(negThree.compareTo(negFive) > 0); // -3 > -5
+        assertEquals(0, negFive.compareTo(new StringNumeric("-5")));
+        assertTrue(negThree.compareTo(three) < 0);   // -3 < 3
+    }
+
+    // ── equals ────────────────────────────────────────────────────────────────
+
+    @Test
     void testEquals() {
-        assertEquals(new StringNumeric("42"), new StringNumeric("42"));
-        assertEquals(new StringNumeric("42"), new StringNumeric("042"));
+        assertEquals(new StringNumeric("42"),  new StringNumeric("42"));
+        assertEquals(new StringNumeric("42"),  new StringNumeric("042"));
         assertNotEquals(new StringNumeric("42"), new StringNumeric("43"));
     }
 
     @Test
+    void testEqualsWithNegatives() {
+        assertEquals(new StringNumeric("-42"), new StringNumeric("-42"));
+        assertNotEquals(new StringNumeric("-42"), new StringNumeric("42"));
+        // both representations of zero are equal
+        assertEquals(new StringNumeric("0"), new StringNumeric("-0"));
+    }
+
+    // ── Number interface ──────────────────────────────────────────────────────
+
+    @Test
     void testNumberInterface() {
         StringNumeric n = new StringNumeric("42");
-        assertEquals(42, n.intValue());
-        assertEquals(42L, n.longValue());
+        assertEquals(42,   n.intValue());
+        assertEquals(42L,  n.longValue());
         assertEquals(42.0f, n.floatValue());
-        assertEquals(42.0, n.doubleValue());
+        assertEquals(42.0,  n.doubleValue());
+    }
+
+    @Test
+    void testNumberInterfaceNegative() {
+        StringNumeric n = new StringNumeric("-42");
+        assertEquals(-42,    n.intValue());
+        assertEquals(-42L,   n.longValue());
+        assertEquals(-42.0f, n.floatValue());
+        assertEquals(-42.0,  n.doubleValue());
     }
 }
