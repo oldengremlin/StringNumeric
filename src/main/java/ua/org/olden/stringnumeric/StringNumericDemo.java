@@ -173,6 +173,43 @@ public class StringNumericDemo {
                 + new StringNumeric("29").mul(new StringNumeric("12")));
         new StringNumeric("29").mul(new StringNumeric("12"), true);
 
+        section("Ділення цілих");
+        div("41", "12");
+        div("100", "4");
+//        div("123456789", "987654321");
+
+        section("Ділення дробових");
+        div("48.12", "15.67");
+        div("3.75", "1.5");
+        div("10", "4");
+        div("1", "0.9");
+        div("0.1", "0.3");
+
+        section("Ділення з великими числами");
+        div("99999999999999999999", "123456789");
+
+        section("Ділення від'ємних");
+        div("-15", "3");
+        div("15", "-3");
+        div("-15", "-3");
+        div("-3.75", "1.5");
+        div("3.75", "-1.5");
+
+        section("Візуалізація ділення");
+        System.out.println(new StringNumeric("48.12") + " ÷ " + new StringNumeric("15.67") + " = "
+                + new StringNumeric("48.12").div(new StringNumeric("15.67")));
+        new StringNumeric("48.12").div(new StringNumeric("15.67"), true);
+        System.out.println();
+
+        System.out.println(new StringNumeric("-100") + " ÷ " + new StringNumeric("4") + " = "
+                + new StringNumeric("-100").div(new StringNumeric("4")));
+        new StringNumeric("-100").div(new StringNumeric("4"), true);
+        System.out.println();
+
+        System.out.println(new StringNumeric("1") + " ÷ " + new StringNumeric("0.9") + " = "
+                + new StringNumeric("1").div(new StringNumeric("0.9")));
+        new StringNumeric("1").div(new StringNumeric("0.9"), true);
+
     }
 
     // --- helpers ---
@@ -197,6 +234,11 @@ public class StringNumericDemo {
     private static void mul(String a, String b) {
         StringNumeric result = new StringNumeric(a).mul(new StringNumeric(b));
         System.out.printf("  %s × %s = %s%n", a, b, result);
+    }
+
+    private static void div(String a, String b) {
+        StringNumeric result = new StringNumeric(a).div(new StringNumeric(b));
+        System.out.printf("  %s ÷ %s = %s%n", a, b, result);
     }
 
     private static void cmp(String a, String b) {

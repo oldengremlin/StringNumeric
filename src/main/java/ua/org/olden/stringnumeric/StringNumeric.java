@@ -181,6 +181,33 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                : mag;
     }
 
+    // --- div ---
+    public StringNumeric div(StringNumeric other) {
+        return div(other, false);
+    }
+
+    /**
+     * Divides this value by {@code other}. Throws ArithmeticException if
+     * dividing by zero. If {@code visualize} is true, prints long division
+     * visualization.
+     */
+    public StringNumeric div(StringNumeric other, boolean visualize) {
+        if (other.isZero()) {
+            throw new ArithmeticException("Division by zero");
+        }
+        if (this.isZero()) {
+            return new StringNumeric("0", 0, false);
+        }
+
+        boolean resultNegative = this.negative != other.negative;
+
+        StringNumeric mag = divideMagnitudes(this, other, visualize);
+
+        return (resultNegative && !mag.isZero())
+               ? new StringNumeric(mag.digits, mag.scale, true)
+               : mag;
+    }
+
     // -- magnitudes --
     private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         return magnitudes(a, b, visualize,
@@ -343,6 +370,91 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return normalize(resultDigits, totalScale);
     }
 
+    private static StringNumeric divideMagnitudes(StringNumeric dividend, StringNumeric divisor, boolean visualize) {
+        if (divisor.isZero()) {
+            throw new ArithmeticException("Division by zero");
+        }
+        if (dividend.isZero()) {
+            if (visualize) {
+                System.out.println(buildDivVisualization(dividend.toString(), divisor.toString(), "0"));
+            }
+            return new StringNumeric("0", 0, false);
+        }
+
+        String num = dividend.digits;
+        String den = divisor.digits;
+        long denVal = Long.parseLong(den);
+
+        // Компенсуємо scale дільника — додаємо нулі до діленого
+        num += "0".repeat(divisor.scale);
+
+        StringBuilder quotient = new StringBuilder();
+        StringBuilder remainder = new StringBuilder();
+
+        boolean inDecimalPart = false;
+        int decimalDigits = 0;
+        final int MAX_PRECISION = 40;
+
+        for (int i = 0; i < num.length() + MAX_PRECISION; i++) {
+            System.err.println("remainder: " + num + " " + den + " " + remainder);
+            // Додаємо наступну цифру до залишку
+            if (i < num.length()) {
+                remainder.append(num.charAt(i));
+            } else {
+                if (!inDecimalPart) {
+                    if (quotient.length() == 0) {
+                        quotient.append('0');
+                    }
+                    quotient.append('.');
+                    inDecimalPart = true;
+                }
+                remainder.append('0');
+                decimalDigits++;
+                if (decimalDigits > MAX_PRECISION) {
+                    break;
+                }
+            }
+
+            // Прибираємо провідні нулі
+            String remStr = remainder.toString().replaceFirst("^0+", "");
+            if (remStr.isEmpty()) {
+                remStr = "0";
+            }
+            remainder = new StringBuilder(remStr);
+
+            long remVal = Long.parseLong(remainder.toString());
+
+            int digit = 0;
+            if (remVal >= denVal) {
+                digit = (int) (remVal / denVal);
+                remainder = new StringBuilder(String.valueOf(remVal - digit * denVal));
+            }
+
+            quotient.append(digit);
+        }
+
+        String resultStr = quotient.toString();
+
+        // Нормалізація
+        if (resultStr.contains(".")) {
+            resultStr = resultStr.replaceAll("0+$", "").replaceAll("\\.$", "");
+        }
+
+        // Видаляємо зайвий '0' на початку, якщо він є (наприклад "05" → "5", "025" → "25")
+        if (resultStr.startsWith("0") && !resultStr.startsWith("0.")) {
+            resultStr = resultStr.replaceFirst("^0+", "");
+            if (resultStr.isEmpty() || resultStr.startsWith(".")) {
+                resultStr = "0" + resultStr;
+            }
+        }
+
+        if (visualize) {
+            System.out.println(buildDivVisualization(dividend.toString(), divisor.toString(), resultStr));
+        }
+
+        return new StringNumeric(resultStr);
+    }
+
     // -- visualization--
     /**
      * Builds a column-style visualization of addition, for example:
@@ -444,6 +556,18 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
         vis.append("─".repeat(maxWidth)).append('\n');
         vis.append(padLeft(resultStr, maxWidth));
+
+        return vis.toString();
+    }
+
+    private static String buildDivVisualization(String dividend, String divisor, String quotient) {
+        int width = Math.max(Math.max(dividend.length(), divisor.length() + 2), quotient.length() + 2);
+
+        StringBuilder vis = new StringBuilder();
+        vis.append(padLeft(dividend, width)).append('\n');
+        vis.append('÷').append(padLeft(divisor, width - 1)).append('\n');
+        vis.append("─".repeat(width)).append('\n');
+        vis.append(padLeft(quotient, width));
 
         return vis.toString();
     }
