@@ -16,13 +16,17 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     private final int scale;       // number of decimal places (0 = integer)
     private final boolean negative; // true if value is negative (always false for zero)
 
+    private record ColumnResult(int digit, int nextTransfer) {
+
+    }
+
     @FunctionalInterface
     private interface ColumnOperation {
 
         /**
          * Повертає масив з двох елементів: [resultDigit, nextCarry]
          */
-        int[] apply(int digitA, int digitB, int incoming);
+        ColumnResult apply(int digitA, int digitB, int incoming);
     }
 
     public StringNumeric(String value) {
@@ -154,12 +158,35 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return add(other.negate(), visualize);
     }
 
+    // --- mul ---
+    public StringNumeric mul(StringNumeric other) {
+        return mul(other, false);
+    }
+
+    /**
+     * Multiplies this value by {@code other}. If {@code visualize} is
+     * {@code true}, prints schoolbook-style multiplication to
+     * {@code System.out}.
+     */
+    public StringNumeric mul(StringNumeric other, boolean visualize) {
+        if (this.isZero() || other.isZero()) {
+            return new StringNumeric("0", 0, false);
+        }
+
+        boolean resultNegative = this.negative != other.negative;
+        StringNumeric mag = multiplyMagnitudes(this, other, visualize);
+
+        return (resultNegative && !mag.isZero())
+               ? new StringNumeric(mag.digits, mag.scale, true)
+               : mag;
+    }
+
     // -- magnitudes --
     private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         return magnitudes(a, b, visualize,
                 (da, db, cin) -> {
                     int sum = da + db + cin;
-                    return new int[]{sum % 10, sum / 10};
+                    return new ColumnResult(sum % 10, sum / 10);
                 },
                 true);
     }
@@ -171,9 +198,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                     int diff = da - db - bin;
                     if (diff < 0) {
                         diff += 10;
-                        return new int[]{diff, 1};
+                        return new ColumnResult(diff, 1);
                     }
-                    return new int[]{diff, 0};
+                    return new ColumnResult(diff, 0);
                 },
                 false);
     }
@@ -195,7 +222,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         String pa = "0".repeat(maxLen - as.length()) + as;
         String pb = "0".repeat(maxLen - bs.length()) + bs;
 
-        int[] carryInto = new int[maxLen + 1];           // для add — carry, для sub — borrow
+        int[] transfer = new int[maxLen + 1];           // для add — carry, для sub — borrow
         int[] resultDigits = new int[maxLen + 1];
 
         // === єдиний цикл (тепер однаковий для обох операцій) ===
@@ -204,13 +231,12 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             int da = pa.charAt(i) - '0';
             int db = pb.charAt(i) - '0';
 
-            int[] res = operation.apply(da, db, carryInto[col]);
-
-            resultDigits[maxLen - col] = res[0];   // результат цифри
-            carryInto[col + 1] = res[1];           // наступний перенос/позика
+            ColumnResult res = operation.apply(da, db, transfer[col]);
+            resultDigits[maxLen - col] = res.digit();   // результат цифри
+            transfer[col + 1] = res.nextTransfer();     // наступний перенос/позика
         }
 
-        resultDigits[0] = carryInto[maxLen];       // для sub завжди 0 (precondition |a| >= |b|)
+        resultDigits[0] = transfer[maxLen];       // для sub завжди 0 (precondition |a| >= |b|)
 
         // === побудова рядка (тепер однакова для add і sub) ===
         StringBuilder sb = new StringBuilder();
@@ -225,14 +251,96 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         // === візуалізація ===
         if (visualize) {
             if (isAddition) {
-                System.out.println(buildAddVisualization(as, bs, resultStr, carryInto, maxLen, maxScale));
+                System.out.println(buildAddVisualization(as, bs, resultStr, transfer, maxLen, maxScale));
             } else {
-                System.out.println(buildSubVisualization(as, bs, resultStr, carryInto, maxLen, maxScale));
-                // carryInto тут виконує роль incomingBorrow — значення ті самі (0/1)
+                System.out.println(buildSubVisualization(as, bs, resultStr, transfer, maxLen, maxScale));
+                // transfer тут виконує роль incomingBorrow — значення ті самі (0/1)
             }
         }
 
         return normalize(resultStr, maxScale);
+    }
+
+    private static StringNumeric multiplyMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        if (a.isZero() || b.isZero()) {
+            if (visualize) {
+                System.out.println(buildFullMulVisualization(a.toString(), b.toString(), "0", new String[0]));
+            }
+            return new StringNumeric("0", 0, false);
+        }
+
+        String da = a.digits;
+        String db = b.digits;
+        int lenA = da.length();
+        int lenB = db.length();
+
+        String[] partialProducts = new String[lenB];
+        int[] res = new int[lenA + lenB];
+
+        for (int j = lenB - 1; j >= 0; j--) {
+            int digitB = db.charAt(j) - '0';
+            int shift = lenB - 1 - j;
+
+            if (digitB == 0) {
+                partialProducts[shift] = "0";
+                continue;
+            }
+
+            StringBuilder partial = new StringBuilder();
+            int carry = 0;
+
+            for (int i = lenA - 1; i >= 0; i--) {
+                int product = (da.charAt(i) - '0') * digitB + carry;
+                partial.append(product % 10);
+                carry = product / 10;
+            }
+            while (carry > 0) {
+                partial.append(carry % 10);
+                carry /= 10;
+            }
+
+            String part = partial.reverse().toString();
+            partialProducts[shift] = part;
+
+            for (int k = 0; k < part.length(); k++) {
+                int digit = part.charAt(part.length() - 1 - k) - '0';
+                res[res.length - 1 - k - shift] += digit;
+            }
+        }
+
+        // carry
+        int carry = 0;
+        for (int i = res.length - 1; i >= 0; i--) {
+            int temp = res[i] + carry;
+            res[i] = temp % 10;
+            carry = temp / 10;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        boolean leading = true;
+        for (int digit : res) {
+            if (leading && digit == 0) {
+                continue;
+            }
+            leading = false;
+            sb.append(digit);
+        }
+        String resultDigits = sb.length() == 0 ? "0" : sb.toString();
+
+        int totalScale = a.scale + b.scale;
+
+        if (visualize) {
+            String aDisplay = a.toString();           // зі знаком!
+            String bDisplay = b.toString();           // зі знаком!
+            String resultDisplay = insertDot(stripLeadingZeros(resultDigits), totalScale);
+            if (a.negative != b.negative && !resultDigits.equals("0")) {
+                resultDisplay = "-" + resultDisplay;
+            }
+
+            System.out.println(buildFullMulVisualization(aDisplay, bDisplay, resultDisplay, partialProducts));
+        }
+
+        return normalize(resultDigits, totalScale);
     }
 
     // -- visualization--
@@ -302,6 +410,40 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         vis.append(operationSign).append(padLeft(b, dw)).append('\n');
         vis.append(' ').repeat("-", dw).append('\n');
         vis.append(' ').append(padLeft(result, dw));
+
+        return vis.toString();
+    }
+
+    /**
+     * Повна шкільна візуалізація множення з усіма частковими добутками.
+     */
+    private static String buildFullMulVisualization(String aStr, String bStr, String resultStr, String[] partials) {
+        int maxWidth = Math.max(Math.max(aStr.length(), bStr.length() + 2), resultStr.length());
+        for (String p : partials) {
+            if (p != null) {
+                maxWidth = Math.max(maxWidth, p.length() + 4);
+            }
+        }
+
+        StringBuilder vis = new StringBuilder();
+
+        vis.append(padLeft(aStr, maxWidth)).append('\n');
+        vis.append('×').append(padLeft(bStr, maxWidth - 1)).append('\n');
+        vis.append("─".repeat(maxWidth)).append('\n');
+
+        // Часткові добутки (завжди позитивні)
+        for (int i = 0; i < partials.length; i++) {
+            String part = partials[i];
+            if (part == null || (part.equals("0") && partials.length > 1)) {
+                continue;
+            }
+
+            String shifted = padLeft(part, maxWidth - i) + " ".repeat(i);
+            vis.append(shifted).append('\n');
+        }
+
+        vis.append("─".repeat(maxWidth)).append('\n');
+        vis.append(padLeft(resultStr, maxWidth));
 
         return vis.toString();
     }

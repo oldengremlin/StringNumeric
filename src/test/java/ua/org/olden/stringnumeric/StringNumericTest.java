@@ -12,7 +12,6 @@ import static org.junit.jupiter.api.Assertions.*;
 class StringNumericTest {
 
     // ── add (positive) ───────────────────────────────────────────────────────
-
     @ParameterizedTest
     @CsvSource({
         "0, 0, 0",
@@ -31,13 +30,13 @@ class StringNumericTest {
 
     @ParameterizedTest
     @CsvSource({
-        "48.12, 15.67, 63.79",   // basic decimal add
-        "1.5,   2.25,  3.75",    // different scales
-        "0.1,   0.9,   1",       // fractional carry produces integer
-        "9.99,  0.01,  10",      // carry across decimal point
-        "0.5,   0.5,   1",       // sum is whole number
-        "1.50,  2.50,  4",       // trailing zeros normalise
-        "100.001, 0.999, 101",   // deep fractional carry
+        "48.12, 15.67, 63.79", // basic decimal add
+        "1.5,   2.25,  3.75", // different scales
+        "0.1,   0.9,   1", // fractional carry produces integer
+        "9.99,  0.01,  10", // carry across decimal point
+        "0.5,   0.5,   1", // sum is whole number
+        "1.50,  2.50,  4", // trailing zeros normalise
+        "100.001, 0.999, 101", // deep fractional carry
     })
     void testAddDecimal(String a, String b, String expected) {
         assertEquals(expected, new StringNumeric(a).add(new StringNumeric(b)).toString());
@@ -51,26 +50,23 @@ class StringNumericTest {
     }
 
     // ── add (negative) ────────────────────────────────────────────────────────
-
     @ParameterizedTest
     @CsvSource({
-        "-1,   -2,   -3",     // both negative
-        "-5,    3,   -2",     // |negative| > |positive|
-        " 3,   -5,   -2",     // |positive| < |negative|
-        "-5,    5,    0",     // cancel out
-        "-0.5,  0.5,  0",     // decimal cancel
-        "-1.5,  1,   -0.5",   // decimal mixed
+        "-1,   -2,   -3", // both negative
+        "-5,    3,   -2", // |negative| > |positive|
+        " 3,   -5,   -2", // |positive| < |negative|
+        "-5,    5,    0", // cancel out
+        "-0.5,  0.5,  0", // decimal cancel
+        "-1.5,  1,   -0.5", // decimal mixed
         " 1,   -1.5, -0.5",
         "-10,   3,   -7",
-        " 7,  -10,   -3",
-    })
+        " 7,  -10,   -3",})
     void testAddWithNegatives(String a, String b, String expected) {
         assertEquals(expected.strip(),
                 new StringNumeric(a.strip()).add(new StringNumeric(b.strip())).toString());
     }
 
     // ── add visualization ─────────────────────────────────────────────────────
-
     @Test
     void testAddVisualizationWithCarry() {
         PrintStream original = System.out;
@@ -119,7 +115,6 @@ class StringNumericTest {
     }
 
     // ── sub (positive) ────────────────────────────────────────────────────────
-
     @ParameterizedTest
     @CsvSource({
         "0,   0,   0",
@@ -138,12 +133,12 @@ class StringNumericTest {
 
     @ParameterizedTest
     @CsvSource({
-        "63.79, 15.67, 48.12",   // basic decimal sub
-        "3.75,  1.5,   2.25",    // different scales
-        "1,     0.9,   0.1",     // integer minus decimal
-        "10,    9.99,  0.01",    // borrow across decimal point
-        "1,     0.5,   0.5",     // result is half
-        "4,     1.50,  2.5",     // trailing zeros normalise
+        "63.79, 15.67, 48.12", // basic decimal sub
+        "3.75,  1.5,   2.25", // different scales
+        "1,     0.9,   0.1", // integer minus decimal
+        "10,    9.99,  0.01", // borrow across decimal point
+        "1,     0.5,   0.5", // result is half
+        "4,     1.50,  2.5", // trailing zeros normalise
         "101,   0.999, 100.001", // deep fractional borrow
     })
     void testSubDecimal(String a, String b, String expected) {
@@ -158,25 +153,22 @@ class StringNumericTest {
     }
 
     // ── sub (negative results & negative operands) ────────────────────────────
-
     @ParameterizedTest
     @CsvSource({
-        " 1,   2,   -1",     // positive result flips sign
+        " 1,   2,   -1", // positive result flips sign
         " 0,   5,   -5",
-        " 1.5, 3,   -1.5",   // decimal
-        "-5,  -3,   -2",     // both negative: -5 - (-3) = -5 + 3 = -2
-        "-3,  -5,    2",     // -3 - (-5) = -3 + 5 = 2
-        "-1,   2,   -3",     // negative minus positive
-        " 5,  -3,    8",     // positive minus negative = sum
-        " 1.5,-1.5,  3",
-    })
+        " 1.5, 3,   -1.5", // decimal
+        "-5,  -3,   -2", // both negative: -5 - (-3) = -5 + 3 = -2
+        "-3,  -5,    2", // -3 - (-5) = -3 + 5 = 2
+        "-1,   2,   -3", // negative minus positive
+        " 5,  -3,    8", // positive minus negative = sum
+        " 1.5,-1.5,  3",})
     void testSubWithNegatives(String a, String b, String expected) {
         assertEquals(expected.strip(),
                 new StringNumeric(a.strip()).sub(new StringNumeric(b.strip())).toString());
     }
 
     // ── sub visualization ─────────────────────────────────────────────────────
-
     @Test
     void testSubVisualizationWithBorrow() {
         PrintStream original = System.out;
@@ -230,8 +222,79 @@ class StringNumericTest {
         assertEquals("-0.5", new StringNumeric("0.5").sub(new StringNumeric("1")).toString());
     }
 
-    // ── constructors ──────────────────────────────────────────────────────────
+    // ── mul (positive) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "0, 0, 0",
+        "1, 0, 0",
+        "29, 12, 348",
+        "999, 1, 999",
+        "10, 20, 200",
+        "123456789, 987654321, 121932631112635269"
+    })
+    void testMul(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).mul(new StringNumeric(b)).toString());
+    }
 
+    @ParameterizedTest
+    @CsvSource({
+        "48.12, 15.67, 754.0404",
+        "1.5,   2.25,  3.375",
+        "0.1,   0.9,   0.09",
+        "9.99,  0.01,  0.0999",
+        "1.50,  2.50,  3.75"
+    })
+    void testMulDecimal(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).mul(new StringNumeric(b)).toString());
+    }
+
+    @Test
+    void testMulBeyondLongRange() {
+        StringNumeric result = new StringNumeric("99999999999999999999")
+                .mul(new StringNumeric("12345678901234567890"));
+        assertEquals("1234567890123456788987654321098765432110", result.toString());
+    }
+
+    // ── mul (negative) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "-5,   3,   -15",
+        " 3,  -5,   -15",
+        "-5,  -3,    15",
+        "-1.5, 2.25, -3.375",
+        " 1.5,-2.25, -3.375"
+    })
+    void testMulWithNegatives(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).mul(new StringNumeric(b.strip())).toString());
+    }
+
+    // ── mul visualization ────────────────────────────────────────────────────
+    @Test
+    void testMulVisualization() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("29").mul(new StringNumeric("12"), true);
+        System.setOut(original);
+
+        assertEquals("    29\n×   12\n──────\n    58\n   29 \n──────\n   348", buf.toString().stripTrailing());
+    }
+
+    @Test
+    void testMulWithoutVisualizationProducesNoOutput() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+
+        new StringNumeric("29").mul(new StringNumeric("12"), false);
+        new StringNumeric("29").mul(new StringNumeric("12"));
+
+        System.setOut(original);
+        assertTrue(buf.toString().isEmpty());
+    }
+
+    // ── constructors ──────────────────────────────────────────────────────────
     @Test
     void testConstructorStripsLeadingZeros() {
         assertEquals("42", new StringNumeric("0042").toString());
@@ -242,37 +305,37 @@ class StringNumericTest {
     @Test
     void testConstructorDecimal() {
         assertEquals("48.12", new StringNumeric("48.12").toString());
-        assertEquals("0.5",   new StringNumeric("0.5").toString());
-        assertEquals("1.5",   new StringNumeric("1.50").toString());   // trailing zero stripped
-        assertEquals("5",     new StringNumeric("5.00").toString());   // all fractional zeros → integer
+        assertEquals("0.5", new StringNumeric("0.5").toString());
+        assertEquals("1.5", new StringNumeric("1.50").toString());   // trailing zero stripped
+        assertEquals("5", new StringNumeric("5.00").toString());   // all fractional zeros → integer
     }
 
     @Test
     void testConstructorNumericTypes() {
-        assertEquals("42",   new StringNumeric(42).toString());
-        assertEquals("42",   new StringNumeric(42L).toString());
+        assertEquals("42", new StringNumeric(42).toString());
+        assertEquals("42", new StringNumeric(42L).toString());
         assertEquals("3.14", new StringNumeric(3.14159, 2).toString());   // rounded to 2 places
         assertEquals("3.14", new StringNumeric(3.14159f, 2).toString());
-        assertEquals("1",    new StringNumeric(0.999, 0).toString());     // rounds to 1
-        assertEquals("3",    new StringNumeric(3.0, 2).toString());       // trailing zeros stripped
+        assertEquals("1", new StringNumeric(0.999, 0).toString());     // rounds to 1
+        assertEquals("3", new StringNumeric(3.0, 2).toString());       // trailing zeros stripped
     }
 
     @Test
     void testConstructorNegativeString() {
-        assertEquals("-42",   new StringNumeric("-42").toString());
+        assertEquals("-42", new StringNumeric("-42").toString());
         assertEquals("-3.14", new StringNumeric("-3.14").toString());
-        assertEquals("-0.5",  new StringNumeric("-0.5").toString());
-        assertEquals("0",     new StringNumeric("-0").toString());   // -0 normalises to 0
-        assertEquals("0",     new StringNumeric("-0.00").toString());
+        assertEquals("-0.5", new StringNumeric("-0.5").toString());
+        assertEquals("0", new StringNumeric("-0").toString());   // -0 normalises to 0
+        assertEquals("0", new StringNumeric("-0.00").toString());
     }
 
     @Test
     void testConstructorNegativeNumericTypes() {
-        assertEquals("-42",   new StringNumeric(-42).toString());
-        assertEquals("-42",   new StringNumeric(-42L).toString());
+        assertEquals("-42", new StringNumeric(-42).toString());
+        assertEquals("-42", new StringNumeric(-42L).toString());
         assertEquals("-3.14", new StringNumeric(-3.14159, 2).toString());
         assertEquals("-3.14", new StringNumeric(-3.14159f, 2).toString());
-        assertEquals("0",     new StringNumeric(-0L).toString());    // -0 normalises to 0
+        assertEquals("0", new StringNumeric(-0L).toString());    // -0 normalises to 0
     }
 
     @Test
@@ -286,24 +349,22 @@ class StringNumericTest {
     }
 
     // ── negate ────────────────────────────────────────────────────────────────
-
     @Test
     void testNegate() {
-        assertEquals("-5",  new StringNumeric("5").negate().toString());
-        assertEquals("5",   new StringNumeric("-5").negate().toString());
-        assertEquals("0",   new StringNumeric("0").negate().toString());   // negate(0) == 0
+        assertEquals("-5", new StringNumeric("5").negate().toString());
+        assertEquals("5", new StringNumeric("-5").negate().toString());
+        assertEquals("0", new StringNumeric("0").negate().toString());   // negate(0) == 0
         assertEquals("-0.5", new StringNumeric("0.5").negate().toString());
         assertEquals("0.5", new StringNumeric("-0.5").negate().toString());
     }
 
     // ── compareTo ─────────────────────────────────────────────────────────────
-
     @Test
     void testCompareTo() {
-        StringNumeric one    = new StringNumeric("1");
-        StringNumeric ten    = new StringNumeric("10");
+        StringNumeric one = new StringNumeric("1");
+        StringNumeric ten = new StringNumeric("10");
         StringNumeric twenty = new StringNumeric("20");
-        StringNumeric tenB   = new StringNumeric("10");
+        StringNumeric tenB = new StringNumeric("10");
 
         assertTrue(one.compareTo(ten) < 0);
         assertTrue(ten.compareTo(twenty) < 0);
@@ -313,9 +374,9 @@ class StringNumericTest {
 
     @Test
     void testCompareToWithNegatives() {
-        StringNumeric negFive  = new StringNumeric("-5");
+        StringNumeric negFive = new StringNumeric("-5");
         StringNumeric negThree = new StringNumeric("-3");
-        StringNumeric three    = new StringNumeric("3");
+        StringNumeric three = new StringNumeric("3");
 
         assertTrue(negFive.compareTo(three) < 0);    // -5 < 3
         assertTrue(negFive.compareTo(negThree) < 0); // -5 < -3
@@ -325,11 +386,10 @@ class StringNumericTest {
     }
 
     // ── equals ────────────────────────────────────────────────────────────────
-
     @Test
     void testEquals() {
-        assertEquals(new StringNumeric("42"),  new StringNumeric("42"));
-        assertEquals(new StringNumeric("42"),  new StringNumeric("042"));
+        assertEquals(new StringNumeric("42"), new StringNumeric("42"));
+        assertEquals(new StringNumeric("42"), new StringNumeric("042"));
         assertNotEquals(new StringNumeric("42"), new StringNumeric("43"));
     }
 
@@ -342,22 +402,21 @@ class StringNumericTest {
     }
 
     // ── Number interface ──────────────────────────────────────────────────────
-
     @Test
     void testNumberInterface() {
         StringNumeric n = new StringNumeric("42");
-        assertEquals(42,   n.intValue());
-        assertEquals(42L,  n.longValue());
+        assertEquals(42, n.intValue());
+        assertEquals(42L, n.longValue());
         assertEquals(42.0f, n.floatValue());
-        assertEquals(42.0,  n.doubleValue());
+        assertEquals(42.0, n.doubleValue());
     }
 
     @Test
     void testNumberInterfaceNegative() {
         StringNumeric n = new StringNumeric("-42");
-        assertEquals(-42,    n.intValue());
-        assertEquals(-42L,   n.longValue());
+        assertEquals(-42, n.intValue());
+        assertEquals(-42L, n.longValue());
         assertEquals(-42.0f, n.floatValue());
-        assertEquals(-42.0,  n.doubleValue());
+        assertEquals(-42.0, n.doubleValue());
     }
 }

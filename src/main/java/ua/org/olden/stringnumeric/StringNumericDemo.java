@@ -122,6 +122,57 @@ public class StringNumericDemo {
                 + new StringNumeric("-63.79").sub(new StringNumeric("-15.67"), false));
         new StringNumeric("-63.79").sub(new StringNumeric("-15.67"), true);
 
+        section("Множення цілих");
+        mul("29", "12");
+        mul("999", "1");
+        mul("123456789", "987654321");
+
+        section("Множення дробових");
+        mul("48.12", "15.67");
+        mul("1.5", "2.25");
+        mul("9.99", "0.01");
+        mul("0.1", "0.9");
+
+        section("Числа за межами long");
+        mul("99999999999999999999", "12345678901234567890");
+
+        section("Множення від'ємних");
+        mul("-5", "3");
+        mul("3", "-5");
+        mul("-5", "-3");
+        mul("-1.5", "2.25");
+        mul("-1.5", "-2.5");
+
+        section("Візуалізація множення");
+        System.out.println(new StringNumeric("29") + "×" + new StringNumeric("12") + "="
+                + new StringNumeric("29").mul(new StringNumeric("12")));
+        new StringNumeric("29").mul(new StringNumeric("12"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("-29") + "×" + new StringNumeric("12") + "="
+                + new StringNumeric("-29").mul(new StringNumeric("12")));
+        new StringNumeric("-29").mul(new StringNumeric("12"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("48.12") + "×" + new StringNumeric("15.67") + "="
+                + new StringNumeric("48.12").mul(new StringNumeric("15.67")));
+        new StringNumeric("48.12").mul(new StringNumeric("15.67"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("48.12") + "×" + new StringNumeric("-15.67") + "="
+                + new StringNumeric("48.12").mul(new StringNumeric("-15.67")));
+        new StringNumeric("48.12").mul(new StringNumeric("-15.67"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("99") + "×" + new StringNumeric("99") + "="
+                + new StringNumeric("99").mul(new StringNumeric("99")));
+        new StringNumeric("99").mul(new StringNumeric("99"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("-99") + "×" + new StringNumeric("-99") + "="
+                + new StringNumeric("-99").mul(new StringNumeric("-99")));
+        new StringNumeric("-99").mul(new StringNumeric("-99"), true);
+
+        System.out.println();
+        System.out.println(new StringNumeric("29") + "×" + new StringNumeric("12") + "="
+                + new StringNumeric("29").mul(new StringNumeric("12")));
+        new StringNumeric("29").mul(new StringNumeric("12"), true);
+
     }
 
     // --- helpers ---
@@ -141,6 +192,11 @@ public class StringNumericDemo {
     private static void sub(String a, String b) {
         StringNumeric result = new StringNumeric(a).sub(new StringNumeric(b));
         System.out.printf("  %s - %s = %s%n", a, b, result);
+    }
+
+    private static void mul(String a, String b) {
+        StringNumeric result = new StringNumeric(a).mul(new StringNumeric(b));
+        System.out.printf("  %s × %s = %s%n", a, b, result);
     }
 
     private static void cmp(String a, String b) {
