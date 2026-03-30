@@ -16,6 +16,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     private final int scale;       // number of decimal places (0 = integer)
     private final boolean negative; // true if value is negative (always false for zero)
 
+    @FunctionalInterface
+    private interface ColumnOperation {
+
+        /**
+         * Повертає масив з двох елементів: [resultDigit, nextCarry]
+         */
+        int[] apply(int digitA, int digitB, int incoming);
+    }
+
     public StringNumeric(String value) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException("Value must not be null or blank");
@@ -29,6 +38,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         String intPart = m.group(1);
         String fracPart = m.group(2) != null ? m.group(2) : "";
+
         String d = stripLeadingZeros(intPart + fracPart);
         int s = fracPart.length();
         // strip trailing fractional zeros (e.g. "1.50" → "1.5")
@@ -40,6 +50,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             d = "0";
             s = 0;
         }
+
         this.digits = d;
         this.scale = s;
         this.negative = neg && !d.equals("0"); // -0 normalises to 0
@@ -89,10 +100,13 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     // --- sign helpers ---
-
-    /** Returns a new value with the sign flipped; negate(0) == 0. */
+    /**
+     * Returns a new value with the sign flipped; negate(0) == 0.
+     */
     public StringNumeric negate() {
-        if (isZero()) return this;
+        if (isZero()) {
+            return this;
+        }
         return new StringNumeric(digits, scale, !negative);
     }
 
@@ -110,72 +124,20 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             // same sign: add magnitudes, keep sign
             StringNumeric mag = addMagnitudes(this, other, visualize);
             return (this.negative && !mag.isZero())
-                    ? new StringNumeric(mag.digits, mag.scale, true)
-                    : mag;
+                   ? new StringNumeric(mag.digits, mag.scale, true)
+                   : mag;
         }
         // different signs: subtract smaller magnitude from larger
         int cmp = compareMagnitudes(this, other);
-        if (cmp == 0) return new StringNumeric("0", 0, false);
-        StringNumeric larger  = cmp > 0 ? this  : other;
+        if (cmp == 0) {
+            return new StringNumeric("0", 0, false);
+        }
+        StringNumeric larger = cmp > 0 ? this : other;
         StringNumeric smaller = cmp > 0 ? other : this;
         StringNumeric mag = subMagnitudes(larger, smaller, visualize);
         return (larger.negative && !mag.isZero())
-                ? new StringNumeric(mag.digits, mag.scale, true)
-                : mag;
-    }
-
-    private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
-        int maxScale = Math.max(a.scale, b.scale);
-
-        // align decimal places
-        String as = a.digits + "0".repeat(maxScale - a.scale);
-        String bs = b.digits + "0".repeat(maxScale - b.scale);
-
-        int maxLen = Math.max(as.length(), bs.length());
-        String pa = "0".repeat(maxLen - as.length()) + as;
-        String pb = "0".repeat(maxLen - bs.length()) + bs;
-
-        // carryInto[k] = carry entering column k from the right (0 = units column)
-        int[] carryInto = new int[maxLen + 1];
-        int[] resultDigits = new int[maxLen + 1]; // [0] = potential leading digit
-
-        for (int col = 0; col < maxLen; col++) {
-            int i = maxLen - 1 - col;
-            int sum = (pa.charAt(i) - '0') + (pb.charAt(i) - '0') + carryInto[col];
-            resultDigits[maxLen - col] = sum % 10;
-            carryInto[col + 1] = sum / 10;
-        }
-        resultDigits[0] = carryInto[maxLen];
-
-        StringBuilder sb = new StringBuilder();
-        if (resultDigits[0] > 0) {
-            sb.append((char) ('0' + resultDigits[0]));
-        }
-        for (int i = 1; i <= maxLen; i++) {
-            sb.append((char) ('0' + resultDigits[i]));
-        }
-        String resultStr = sb.toString();
-
-        if (visualize) {
-            System.out.println(buildAddVisualization(as, bs, resultStr, carryInto, maxLen, maxScale));
-        }
-
-        return normalize(resultStr, maxScale);
-    }
-
-    /**
-     * Builds a column-style visualization of addition, for example:
-     * <pre>
-     *  1
-     *  48.12
-     * +15.67
-     *  -----
-     *  63.79
-     * </pre>
-     */
-    private static String buildAddVisualization(String aRaw, String bRaw, String resultRaw,
-            int[] carryInto, int maxLen, int scale) {
-        return buildVisualization(aRaw, bRaw, resultRaw, carryInto, maxLen, scale, '+', carry -> (char) ('0' + carry));
+               ? new StringNumeric(mag.digits, mag.scale, true)
+               : mag;
     }
 
     // --- sub ---
@@ -192,43 +154,101 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return add(other.negate(), visualize);
     }
 
+    // -- magnitudes --
+    private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        return magnitudes(a, b, visualize,
+                (da, db, cin) -> {
+                    int sum = da + db + cin;
+                    return new int[]{sum % 10, sum / 10};
+                },
+                true);
+    }
+
     private static StringNumeric subMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
-        // precondition: |a| >= |b|
+        // precondition: |a| >= |b| вже гарантується в add()
+        return magnitudes(a, b, visualize,
+                (da, db, bin) -> {
+                    int diff = da - db - bin;
+                    if (diff < 0) {
+                        diff += 10;
+                        return new int[]{diff, 1};
+                    }
+                    return new int[]{diff, 0};
+                },
+                false);
+    }
+
+    private static StringNumeric magnitudes(
+            StringNumeric a,
+            StringNumeric b,
+            boolean visualize,
+            ColumnOperation operation,
+            boolean isAddition) {   // для вибору візуалізації
+
         int maxScale = Math.max(a.scale, b.scale);
 
-        // align decimal places
+        // === спільна частина (вирівнювання) ===
         String as = a.digits + "0".repeat(maxScale - a.scale);
         String bs = b.digits + "0".repeat(maxScale - b.scale);
-
         int maxLen = Math.max(as.length(), bs.length());
+
         String pa = "0".repeat(maxLen - as.length()) + as;
         String pb = "0".repeat(maxLen - bs.length()) + bs;
 
-        // incomingBorrow[k] = borrow entering column k from the right (0 = units column)
-        int[] incomingBorrow = new int[maxLen + 1];
-        int[] resultDigits = new int[maxLen];
+        int[] carryInto = new int[maxLen + 1];           // для add — carry, для sub — borrow
+        int[] resultDigits = new int[maxLen + 1];
 
+        // === єдиний цикл (тепер однаковий для обох операцій) ===
         for (int col = 0; col < maxLen; col++) {
             int i = maxLen - 1 - col;
-            int diff = (pa.charAt(i) - '0') - (pb.charAt(i) - '0') - incomingBorrow[col];
-            if (diff < 0) {
-                diff += 10;
-                incomingBorrow[col + 1] = 1;
-            }
-            resultDigits[i] = diff;
+            int da = pa.charAt(i) - '0';
+            int db = pb.charAt(i) - '0';
+
+            int[] res = operation.apply(da, db, carryInto[col]);
+
+            resultDigits[maxLen - col] = res[0];   // результат цифри
+            carryInto[col + 1] = res[1];           // наступний перенос/позика
         }
 
+        resultDigits[0] = carryInto[maxLen];       // для sub завжди 0 (precondition |a| >= |b|)
+
+        // === побудова рядка (тепер однакова для add і sub) ===
         StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < maxLen; i++) {
+        if (resultDigits[0] > 0) {
+            sb.append((char) ('0' + resultDigits[0]));
+        }
+        for (int i = 1; i <= maxLen; i++) {
             sb.append((char) ('0' + resultDigits[i]));
         }
         String resultStr = sb.toString();
 
+        // === візуалізація ===
         if (visualize) {
-            System.out.println(buildSubVisualization(as, bs, resultStr, incomingBorrow, maxLen, maxScale));
+            if (isAddition) {
+                System.out.println(buildAddVisualization(as, bs, resultStr, carryInto, maxLen, maxScale));
+            } else {
+                System.out.println(buildSubVisualization(as, bs, resultStr, carryInto, maxLen, maxScale));
+                // carryInto тут виконує роль incomingBorrow — значення ті самі (0/1)
+            }
         }
 
         return normalize(resultStr, maxScale);
+    }
+
+    // -- visualization--
+    /**
+     * Builds a column-style visualization of addition, for example:
+     * <pre>
+     *  1
+     *  48.12
+     * +15.67
+     *  -----
+     *  63.79
+     * </pre>
+     */
+    private static String buildAddVisualization(String aRaw, String bRaw, String resultRaw,
+                                                int[] carryInto, int maxLen, int scale) {
+        return buildVisualization(aRaw, bRaw, resultRaw, carryInto, maxLen, scale, '+', carry -> (char) ('0' + carry));
     }
 
     /**
@@ -243,12 +263,12 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * (effectively reduced by 1).
      */
     private static String buildSubVisualization(String aRaw, String bRaw, String resultRaw,
-            int[] incomingBorrow, int maxLen, int scale) {
+                                                int[] incomingBorrow, int maxLen, int scale) {
         return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-', borrow -> '1');
     }
 
     private static String buildVisualization(String aRaw, String bRaw, String resultRaw,
-            int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
+                                             int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
 
         // reinsert decimal point for display only
         String a = insertDot(aRaw, scale);
@@ -287,7 +307,6 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     // --- Number ---
-
     @Override
     public int intValue() {
         return (int) longValue();
