@@ -388,6 +388,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
         // Для візуалізації
         java.util.List<String> steps = new java.util.ArrayList<>();
+        boolean hasStarted = false; // перша ненульова цифра частки вже зустрілася
 
         // 2. Визначаємо, скільки знаків після коми ми хочемо (наприклад, 10)
         int precision = 10;
@@ -412,10 +413,17 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                     window = window.sub(div);
                     qDigit++;
                 }
-                // Для візуалізації: запам'ятовуємо, що ми віднімали
-                if (visualize) {
+            }
+
+            if (qDigit > 0) hasStarted = true;
+            if (visualize) {
+                if (qDigit > 0) {
                     steps.add(currentRemainder);
                     steps.add(div.mul(new StringNumeric(qDigit)).digits);
+                } else if (hasStarted && i < d1Digits.length()) {
+                    // Нульова цифра у цілій частині: показуємо знесення
+                    steps.add(currentRemainder);
+                    steps.add("0");
                 }
             }
 
@@ -579,30 +587,34 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                         .append("\n");
             }
 
-            // Малюємо віднімання
-            sb
-                    .append(indent)
-                    .append(" ".repeat(Math.abs(subtracted.length() - window.length())))
-                    .append("-")
-                    .append(subtracted);
-            if (i == 0) {
+            if (subtracted.equals("0")) {
+                // Нульова цифра частки: знесене число менше дільника, рядок віднімання не потрібен
+                sb.append(indent).append("─".repeat(window.length() + 1)).append("\n");
+            } else {
+                // Малюємо віднімання
                 sb
-                        .append(" ".repeat(d1.length() - window.length()))
-                        .append(" ├") // ╰
-                        .append("─".repeat(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", "").length() + 2));
-            }
-            sb.append("\n");
+                        .append(indent)
+                        .append(" ".repeat(Math.abs(subtracted.length() - window.length())))
+                        .append("-")
+                        .append(subtracted);
+                if (i == 0) {
+                    sb
+                            .append(" ".repeat(d1.length() - window.length()))
+                            .append(" ├") // ╰
+                            .append("─".repeat(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", "").length() + 2));
+                }
+                sb.append("\n");
 
-            // Лінія підкреслення довжиною з вікно
-            //sb.append(indent).append("━".repeat(window.length())).append("\n");
-            sb.append(indent).append("─".repeat(Math.max(subtracted.length(), window.length()) + 1));
-            if (i == 0) {
-                sb
-                        .append(" ".repeat(d1.length() - window.length() + 1))
-                        .append("│ ")
-                        .append(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", ""));
+                // Лінія підкреслення довжиною з вікно
+                sb.append(indent).append("─".repeat(Math.max(subtracted.length(), window.length()) + 1));
+                if (i == 0) {
+                    sb
+                            .append(" ".repeat(d1.length() - window.length() + 1))
+                            .append("│ ")
+                            .append(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", ""));
+                }
+                sb.append("\n");
             }
-            sb.append("\n");
 
             // Розраховуємо позицію для наступного кроку
             // currentPos зміщується вправо залежно від того, скільки цифр "з'їло" віднімання
