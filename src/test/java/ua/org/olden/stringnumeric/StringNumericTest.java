@@ -294,6 +294,89 @@ class StringNumericTest {
         assertTrue(buf.toString().isEmpty());
     }
 
+    // ── div (positive) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "100, 4,   25",
+        "10,  2,   5",
+        "15,  3,   5",
+        "1,   1,   1",
+        "0,   5,   0"
+    })
+    void testDiv(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).div(new StringNumeric(b.strip())).toString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "3.75, 1.5,   2.5",
+        "10,   4,     2.5",
+        "41,   12,    3.4166666666",
+        "1,    0.9,   1.1111111111",
+        "0.1,  0.3,   0.3333333333",
+        "48.12,15.67, 3.0708359923"
+    })
+    void testDivDecimal(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).div(new StringNumeric(b.strip())).toString());
+    }
+
+    @Test
+    void testDivBeyondLongRange() {
+        StringNumeric result = new StringNumeric("99999999999999999999")
+                .div(new StringNumeric("123456789"));
+        assertEquals("810000007371.000067068", result.toString());
+    }
+
+    @Test
+    void testDivByZeroThrows() {
+        assertThrows(ArithmeticException.class,
+                () -> new StringNumeric("5").div(new StringNumeric("0")));
+    }
+
+    // ── div (negative) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "-15,   3,   -5",
+        " 15,  -3,   -5",
+        "-15,  -3,    5",
+        "-3.75, 1.5, -2.5",
+        " 3.75,-1.5, -2.5"
+    })
+    void testDivWithNegatives(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).div(new StringNumeric(b.strip())).toString());
+    }
+
+    // ── div visualization ────────────────────────────────────────────────────
+    @Test
+    void testDivVisualization() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("100").div(new StringNumeric("4"), true);
+        System.setOut(original);
+
+        String out = buf.toString().stripTrailing();
+        assertTrue(out.contains("100"), "should contain dividend");
+        assertTrue(out.contains("4"),   "should contain divisor");
+        assertTrue(out.contains("25"),  "should contain quotient");
+        assertTrue(out.contains("-8"),  "should show first subtraction");
+        assertTrue(out.contains("-20"), "should show second subtraction");
+    }
+
+    @Test
+    void testDivWithoutVisualizationProducesNoOutput() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("100").div(new StringNumeric("4"));
+        new StringNumeric("100").div(new StringNumeric("4"), false);
+        System.setOut(original);
+        assertTrue(buf.toString().isEmpty());
+    }
+
     // ── constructors ──────────────────────────────────────────────────────────
     @Test
     void testConstructorStripsLeadingZeros() {
