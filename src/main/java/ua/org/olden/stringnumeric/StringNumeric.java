@@ -414,11 +414,22 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             int qDigit = 0;
 
             if (window.compareTo(div) >= 0) {
-                // Підбираємо цифру частки
-                while (window.compareTo(div) >= 0) {
-                    window = window.sub(div);
-                    qDigit++;
-                }
+//                // Підбираємо цифру частки
+//                while (window.compareTo(div) >= 0) {
+//                    window = window.sub(div);
+//                    qDigit++;
+//                }
+                qDigit = new BigInteger(currentRemainder)
+                        .divide(new BigInteger(d2Digits))
+                        .intValue();
+                window = new StringNumeric(
+                        new BigInteger(currentRemainder)
+                                .subtract(
+                                        new BigInteger(d2Digits)
+                                                .multiply(BigInteger.valueOf(qDigit)
+                                                )
+                                ).toString()
+                );
             }
 
             if (qDigit > 0) {
