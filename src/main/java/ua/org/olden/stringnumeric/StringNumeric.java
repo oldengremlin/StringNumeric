@@ -600,7 +600,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 sb
                         .append(" ".repeat(d1.length() - window.length() + 1))
                         .append("│ ")
-                        .append(cleanQuotient.replaceAll("0+$", ""));
+                        .append(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", ""));
             }
             sb.append("\n");
 
@@ -616,7 +616,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
         return sb.toString();
     }
-    
+
     // --- Number ---
     @Override
     public int intValue() {
