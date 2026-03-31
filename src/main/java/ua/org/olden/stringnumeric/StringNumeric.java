@@ -426,7 +426,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                         new BigInteger(currentRemainder)
                                 .subtract(
                                         new BigInteger(d2Digits)
-                                                .multiply(BigInteger.valueOf(qDigit)
+                                                .multiply(
+                                                        BigInteger.valueOf(qDigit)
                                                 )
                                 ).toString()
                 );
