@@ -616,7 +616,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
         return sb.toString();
     }
-
+    
     // --- Number ---
     @Override
     public int intValue() {
