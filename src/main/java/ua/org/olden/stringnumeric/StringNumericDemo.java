@@ -215,6 +215,10 @@ public class StringNumericDemo {
                 + new StringNumeric("48.12").div(new StringNumeric("15.678")));
         new StringNumeric("48.12").div(new StringNumeric("15.678"), true);
 
+        System.out.println(new StringNumeric("700") + " ÷ " + new StringNumeric("7") + " = "
+                + new StringNumeric("700").div(new StringNumeric("7")));
+        new StringNumeric("700").div(new StringNumeric("7"), true);
+
     }
 
     // --- helpers ---

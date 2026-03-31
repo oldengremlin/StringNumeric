@@ -183,7 +183,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
     // --- div ---
     public StringNumeric div(StringNumeric other) {
-        return div(other, false);
+        return div(other, 10, false);
+    }
+
+    public StringNumeric div(StringNumeric other, int precision) {
+        return div(other, precision, false);
+    }
+
+    public StringNumeric div(StringNumeric other, boolean visualize) {
+        return div(other, 10, visualize);
     }
 
     /**
@@ -191,7 +199,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * dividing by zero. If {@code visualize} is true, prints long division
      * visualization.
      */
-    public StringNumeric div(StringNumeric other, boolean visualize) {
+    public StringNumeric div(StringNumeric other, int precision, boolean visualize) {
         if (other.isZero()) {
             throw new ArithmeticException("Division by zero");
         }
@@ -201,7 +209,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
         boolean resultNegative = this.negative != other.negative;
 
-        StringNumeric mag = divideMagnitudes(this, other, visualize);
+        StringNumeric mag = divideMagnitudes(this, other, precision, visualize);
 
         return (resultNegative && !mag.isZero())
                ? new StringNumeric(mag.digits, mag.scale, true)
@@ -370,7 +378,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return normalize(resultDigits, totalScale);
     }
 
-    private static StringNumeric divideMagnitudes(StringNumeric dividend, StringNumeric divisor, boolean visualize) {
+    private static StringNumeric divideMagnitudes(StringNumeric dividend, StringNumeric divisor, int precision, boolean visualize) {
         // 1. Приводимо до цілих чисел (прибираємо кому)
         // Наприклад: 4.8 / 1.2 -> 48 / 12
         int commonScale = Math.max(dividend.scale, divisor.scale);
@@ -381,7 +389,6 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         d1Digits = stripLeadingZeros(d1Digits);
         d2Digits = stripLeadingZeros(d2Digits);
 
-//        System.err.println("d1Digits=" + d1Digits + ", d2Digits=" + d2Digits);
         StringNumeric div = new StringNumeric(d2Digits);
         StringBuilder quotient = new StringBuilder();
         String currentRemainder = "";
@@ -391,7 +398,6 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         boolean hasStarted = false; // перша ненульова цифра частки вже зустрілася
 
         // 2. Визначаємо, скільки знаків після коми ми хочемо (наприклад, 10)
-        int precision = 10;
         int totalDigitsToProcess = d1Digits.length() + precision;
         int dotPosition = d1Digits.length();
 
@@ -415,7 +421,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 }
             }
 
-            if (qDigit > 0) hasStarted = true;
+            if (qDigit > 0) {
+                hasStarted = true;
+            }
             if (visualize) {
                 if (qDigit > 0) {
                     steps.add(currentRemainder);
