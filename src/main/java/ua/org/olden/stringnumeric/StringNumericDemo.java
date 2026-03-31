@@ -176,7 +176,7 @@ public class StringNumericDemo {
         section("Ділення цілих");
         div("41", "12");
         div("100", "4");
-//        div("123456789", "987654321");
+        div("123456789", "987654321");
 
         section("Ділення дробових");
         div("48.12", "15.67");
@@ -198,17 +198,23 @@ public class StringNumericDemo {
         section("Візуалізація ділення");
         System.out.println(new StringNumeric("48.12") + " ÷ " + new StringNumeric("15.67") + " = "
                 + new StringNumeric("48.12").div(new StringNumeric("15.67")));
-        new StringNumeric("48.12").div(new StringNumeric("15.67"), true);
-        System.out.println();
+//        new StringNumeric("48.12").div(new StringNumeric("15.67"), true);
+//        System.out.println();
 
         System.out.println(new StringNumeric("-100") + " ÷ " + new StringNumeric("4") + " = "
                 + new StringNumeric("-100").div(new StringNumeric("4")));
-        new StringNumeric("-100").div(new StringNumeric("4"), true);
-        System.out.println();
+//        new StringNumeric("-100").div(new StringNumeric("4"), true);
+//        System.out.println();
 
         System.out.println(new StringNumeric("1") + " ÷ " + new StringNumeric("0.9") + " = "
                 + new StringNumeric("1").div(new StringNumeric("0.9")));
-        new StringNumeric("1").div(new StringNumeric("0.9"), true);
+//        new StringNumeric("1").div(new StringNumeric("0.9"), true);
+
+        System.out.println(new StringNumeric("48.12") + " ÷ " + new StringNumeric("15.678") + " = "
+                + new StringNumeric("48.12").div(new StringNumeric("15.678")));
+        new StringNumeric("48.12").div(new StringNumeric("15.678"), true);
+
+        new StringNumeric("1255").div(new StringNumeric("50"), true);
 
     }
 

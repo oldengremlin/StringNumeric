@@ -371,85 +371,69 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     private static StringNumeric divideMagnitudes(StringNumeric dividend, StringNumeric divisor, boolean visualize) {
-        if (divisor.isZero()) {
-            throw new ArithmeticException("Division by zero");
-        }
-        if (dividend.isZero()) {
-            if (visualize) {
-                System.out.println(buildDivVisualization(dividend.toString(), divisor.toString(), "0"));
-            }
-            return new StringNumeric("0", 0, false);
-        }
+        // 1. Приводимо до цілих чисел (прибираємо кому)
+        // Наприклад: 4.8 / 1.2 -> 48 / 12
+        int commonScale = Math.max(dividend.scale, divisor.scale);
+        String d1Digits = dividend.digits + "0".repeat(commonScale - dividend.scale);
+        String d2Digits = divisor.digits + "0".repeat(commonScale - divisor.scale);
 
-        String num = dividend.digits;
-        String den = divisor.digits;
-        long denVal = Long.parseLong(den);
+        // Прибираємо ведучі нулі для коректної роботи
+        d1Digits = stripLeadingZeros(d1Digits);
+        d2Digits = stripLeadingZeros(d2Digits);
 
-        // Компенсуємо scale дільника — додаємо нулі до діленого
-        num += "0".repeat(divisor.scale);
-
+//        System.err.println("d1Digits=" + d1Digits + ", d2Digits=" + d2Digits);
+        StringNumeric div = new StringNumeric(d2Digits);
         StringBuilder quotient = new StringBuilder();
-        StringBuilder remainder = new StringBuilder();
+        String currentRemainder = "";
 
-        boolean inDecimalPart = false;
-        int decimalDigits = 0;
-        final int MAX_PRECISION = 40;
+        // Для візуалізації
+        java.util.List<String> steps = new java.util.ArrayList<>();
 
-        for (int i = 0; i < num.length() + MAX_PRECISION; i++) {
-            System.err.println("remainder: " + num + " " + den + " " + remainder);
-            // Додаємо наступну цифру до залишку
-            if (i < num.length()) {
-                remainder.append(num.charAt(i));
-            } else {
-                if (!inDecimalPart) {
-                    if (quotient.length() == 0) {
-                        quotient.append('0');
-                    }
-                    quotient.append('.');
-                    inDecimalPart = true;
+        // 2. Визначаємо, скільки знаків після коми ми хочемо (наприклад, 10)
+        int precision = 10;
+        int totalDigitsToProcess = d1Digits.length() + precision;
+        int dotPosition = d1Digits.length();
+
+        for (int i = 0; i < totalDigitsToProcess; i++) {
+            // Беремо наступну цифру або 0, якщо цифри діленого закінчилися
+            char nextDigit = (i < d1Digits.length()) ? d1Digits.charAt(i) : '0';
+            currentRemainder = stripLeadingZeros(currentRemainder + nextDigit);
+
+            if (currentRemainder.isEmpty()) {
+                currentRemainder = "0";
+            }
+
+            StringNumeric window = new StringNumeric(currentRemainder);
+            int qDigit = 0;
+
+            if (window.compareTo(div) >= 0) {
+                // Підбираємо цифру частки
+                while (window.compareTo(div) >= 0) {
+                    window = window.sub(div);
+                    qDigit++;
                 }
-                remainder.append('0');
-                decimalDigits++;
-                if (decimalDigits > MAX_PRECISION) {
-                    break;
+                // Для візуалізації: запам'ятовуємо, що ми віднімали
+                if (visualize) {
+                    steps.add(currentRemainder);
+                    steps.add(div.mul(new StringNumeric(qDigit)).digits);
                 }
             }
 
-            // Прибираємо провідні нулі
-            String remStr = remainder.toString().replaceFirst("^0+", "");
-            if (remStr.isEmpty()) {
-                remStr = "0";
+            quotient.append(qDigit);
+            currentRemainder = window.digits;
+
+            // Додаємо крапку в рядок частки, якщо пройшли цілу частину
+            if (i == dotPosition - 1 && i < totalDigitsToProcess - 1) {
+                quotient.append('.');
             }
-            remainder = new StringBuilder(remStr);
-
-            long remVal = Long.parseLong(remainder.toString());
-
-            int digit = 0;
-            if (remVal >= denVal) {
-                digit = (int) (remVal / denVal);
-                remainder = new StringBuilder(String.valueOf(remVal - digit * denVal));
-            }
-
-            quotient.append(digit);
         }
 
         String resultStr = quotient.toString();
-
-        // Нормалізація
-        if (resultStr.contains(".")) {
-            resultStr = resultStr.replaceAll("0+$", "").replaceAll("\\.$", "");
-        }
-
-        // Видаляємо зайвий '0' на початку, якщо він є (наприклад "05" → "5", "025" → "25")
-        if (resultStr.startsWith("0") && !resultStr.startsWith("0.")) {
-            resultStr = resultStr.replaceFirst("^0+", "");
-            if (resultStr.isEmpty() || resultStr.startsWith(".")) {
-                resultStr = "0" + resultStr;
-            }
-        }
+        // Якщо візуалізація увімкнена, тут можна викликати оновлений buildDivVisualization
+        // з використанням зібраних steps
 
         if (visualize) {
-            System.out.println(buildDivVisualization(dividend.toString(), divisor.toString(), resultStr));
+            System.out.println(buildLongDivVisualization(d1Digits, d2Digits, resultStr, steps));
         }
 
         return new StringNumeric(resultStr);
@@ -560,16 +544,77 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return vis.toString();
     }
 
-    private static String buildDivVisualization(String dividend, String divisor, String quotient) {
-        int width = Math.max(Math.max(dividend.length(), divisor.length() + 2), quotient.length() + 2);
+    private static String buildLongDivVisualization(String d1, String d2, String quotient, java.util.List<String> steps) {
+        StringBuilder sb = new StringBuilder();
 
-        StringBuilder vis = new StringBuilder();
-        vis.append(padLeft(dividend, width)).append('\n');
-        vis.append('÷').append(padLeft(divisor, width - 1)).append('\n');
-        vis.append("─".repeat(width)).append('\n');
-        vis.append(padLeft(quotient, width));
+        // Шапка: 48120 | 15678
+        sb
+                .append(" ")
+                .append(d1)
+                .append(" │ ")
+                .append(d2)
+                .append("\n");
 
-        return vis.toString();
+        // quotient може починатися з нулів, як у вашому прикладі - їх краще почистити для заголовка
+        String cleanQuotient = quotient.replaceFirst("^0+", "");
+        if (cleanQuotient.startsWith(".")) {
+            cleanQuotient = "0" + cleanQuotient;
+        }
+
+        int currentPos = 0;
+
+        for (int i = 0; i < steps.size(); i += 2) {
+            String window = steps.get(i);      // Що зараз ділимо (напр. 48120)
+            String subtracted = steps.get(i + 1); // Що віднімаємо (напр. 47034)
+
+            // Визначаємо відступ. У стовпчику він збільшується поступово
+            String indent = " ".repeat(currentPos);
+
+            // Малюємо поточне число (остачу з минулого кроку + знесену цифру)
+            if (i > 0) {
+                sb
+                        .append(" ")
+                        .append(indent)
+                        .append(window)
+                        .append("\n");
+            }
+
+            // Малюємо віднімання
+            sb
+                    .append(indent)
+                    .append(" ".repeat(Math.abs(subtracted.length() - window.length())))
+                    .append("-")
+                    .append(subtracted);
+            if (i == 0) {
+                sb
+                        .append(" ".repeat(d1.length() - window.length()))
+                        .append(" ├") // ╰
+                        .append("─".repeat(cleanQuotient.length()));
+            }
+            sb.append("\n");
+
+            // Лінія підкреслення довжиною з вікно
+            //sb.append(indent).append("━".repeat(window.length())).append("\n");
+            sb.append(indent).append("─".repeat(Math.max(subtracted.length(), window.length()) + 1));
+            if (i == 0) {
+                sb
+                        .append(" ".repeat(d1.length() - window.length() + 1))
+                        .append("│ ")
+                        .append(cleanQuotient.replaceAll("0+$", ""));
+            }
+            sb.append("\n");
+
+            // Розраховуємо позицію для наступного кроку
+            // currentPos зміщується вправо залежно від того, скільки цифр "з'їло" віднімання
+            int remainderLen = new StringNumeric(window).sub(new StringNumeric(subtracted)).digits.length();
+            if (window.equals(subtracted)) {
+                remainderLen = 0;
+            }
+
+            currentPos += (window.length() - remainderLen);
+        }
+
+        return sb.toString();
     }
 
     // --- Number ---
