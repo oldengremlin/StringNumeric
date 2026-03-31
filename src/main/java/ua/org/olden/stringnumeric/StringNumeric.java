@@ -589,7 +589,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 sb
                         .append(" ".repeat(d1.length() - window.length()))
                         .append(" ├") // ╰
-                        .append("─".repeat(cleanQuotient.length()));
+                        .append("─".repeat(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", "").length() + 2));
             }
             sb.append("\n");
 
