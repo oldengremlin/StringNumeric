@@ -8,31 +8,58 @@ import java.util.function.IntFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+/**
+ * Число довільної точності зі знаком, що зберігає значення у вигляді рядка цифр.
+ *
+ * <p>Внутрішнє представлення:
+ * <ul>
+ *   <li>{@code digits}   — рядок значущих цифр без десяткової крапки</li>
+ *   <li>{@code scale}    — кількість знаків після коми (0 = ціле число)</li>
+ *   <li>{@code negative} — ознака від'ємного числа (для нуля завжди {@code false})</li>
+ * </ul>
+ * Наприклад, {@code -48.12} зберігається як
+ * {@code digits="4812", scale=2, negative=true}.
+ *
+ * <p>Усі чотири арифметичні операції реалізовано у вигляді шкільних алгоритмів
+ * «в стовпчик». За бажанням кожну операцію можна вивести у вигляді шкільного
+ * запису (параметр {@code visualize}).
+ */
 public final class StringNumeric extends Number implements Comparable<StringNumeric> {
-    
-    private static final Pattern VALUE_PATTERN = Pattern.compile("(\\d+)(?:\\.(\\d+))?");
-    
-    private final String digits;   // all significant digits without decimal point
-    private final int scale;       // number of decimal places (0 = integer)
-    private final boolean negative; // true if value is negative (always false for zero)
 
+    private static final Pattern VALUE_PATTERN = Pattern.compile("(\\d+)(?:\\.(\\d+))?");
+
+    private final String digits;   // значущі цифри без десяткової крапки
+    private final int scale;       // кількість знаків після коми (0 = ціле число)
+    private final boolean negative; // true якщо число від'ємне (для нуля завжди false)
+
+    /** Результат однієї колонкової операції: цифра результату та перенос/позика на наступний розряд. */
     private record ColumnResult(int digit, int nextTransfer) {
-        
+
     }
-    
+
+    /** Результат нормалізації рядка цифр: цифри без зайвих нулів та відповідний scale. */
     private record returnStripZeros(String digit, int scale) {
-        
+
     }
-    
+
+    /**
+     * Функціональний інтерфейс для однієї колонкової операції (додавання або віднімання).
+     * Приймає дві цифри та вхідний перенос/позику, повертає цифру результату і вихідний перенос/позику.
+     */
     @FunctionalInterface
     private interface ColumnOperation {
 
-        /**
-         * Повертає масив з двох елементів: [resultDigit, nextCarry]
-         */
         ColumnResult apply(int digitA, int digitB, int incoming);
     }
     
+    /**
+     * Створює число з рядкового представлення.
+     * Допустимий формат: необов'язковий знак {@code -}, цілі цифри,
+     * необов'язкова десяткова частина через {@code .}.
+     * Провідні та хвостові нулі нормалізуються: {@code "-007.50"} → {@code "-7.5"}.
+     *
+     * @throws IllegalArgumentException якщо рядок {@code null}, порожній або має недопустимий формат
+     */
     public StringNumeric(String value) {
         if (value == null) {
             throw new IllegalArgumentException("Value must not be null or blank");
@@ -63,10 +90,12 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         this.negative = neg && !stripZeros.digit.equals("0"); // -0 normalises to 0
     }
     
+    /** Створює ціле число з {@code int}. */
     public StringNumeric(int value) {
         this((long) value);
     }
-    
+
+    /** Створює ціле число з {@code long}. */
     public StringNumeric(long value) {
         this.negative = value < 0;
         this.digits = Long.toString(Math.abs(value));
@@ -74,15 +103,19 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     /**
-     * Creates a StringNumeric from a {@code double}, rounded to {@code scale}
-     * decimal places. An explicit scale is required to avoid floating-point
-     * representation surprises (e.g. {@code 0.1 + 0.2 == 0.30000000000000004}).
+     * Створює число з {@code double}, округлене до {@code scale} знаків після коми.
+     * Явний {@code scale} обов'язковий, щоб уникнути сюрпризів двійкової арифметики
+     * (наприклад, {@code 0.1 + 0.2 == 0.30000000000000004}).
+     *
+     * @throws IllegalArgumentException якщо {@code scale} від'ємний
      */
     public StringNumeric(double value, int scale) {
         this(formatFloating(value, scale));
     }
 
     /**
+     * Створює число з {@code float}, округлене до {@code scale} знаків після коми.
+     *
      * @see #StringNumeric(double, int)
      */
     public StringNumeric(float value, int scale) {
@@ -99,16 +132,16 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return value < 0 ? "-" + plain : plain;
     }
 
-    // Private constructor — digits/scale/negative already normalised.
+    // Приватний конструктор — digits/scale/negative вже нормалізовані.
     private StringNumeric(String digits, int scale, boolean negative) {
         this.digits = digits;
         this.scale = scale;
         this.negative = negative;
     }
 
-    // --- sign helpers ---
+    // --- знак ---
     /**
-     * Returns a new value with the sign flipped; negate(0) == 0.
+     * Повертає нове значення з протилежним знаком; {@code negate(0) == 0}.
      */
     public StringNumeric negate() {
         if (isZero()) {
@@ -117,13 +150,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return new StringNumeric(digits, scale, !negative);
     }
     
+    /** Повертає {@code true}, якщо значення дорівнює нулю. */
     public boolean isZero() {
-        return digits.equals("0"); // after normalisation zero always has scale == 0
+        return digits.equals("0"); // після нормалізації нуль завжди має scale == 0
     }
 
-    // --- add ---
+    // --- додавання ---
     /**
-     * Added {@code other} to this value. The result may be negative.
+     * Додає {@code other} до цього значення. Результат може бути від'ємним.
+     * Якщо {@code visualize == true} — виводить шкільний запис операції до {@code System.out}.
      */
     public StringNumeric add(StringNumeric other, boolean visualize) {
         if (this.negative == other.negative) {
@@ -146,29 +181,30 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                : mag;
     }
     
+    /** Додає {@code other} до цього значення. */
     public StringNumeric add(StringNumeric other) {
         return add(other, false);
     }
 
-    // --- sub ---
+    // --- віднімання ---
     /**
-     * Subtracts {@code other} from this value. The result may be negative.
-     * Delegates to {@code add(other.negate(), visualize)}, so the visualization
-     * shows the underlying magnitude operation (addition or subtraction).
+     * Віднімає {@code other} від цього значення. Результат може бути від'ємним.
+     * Делегує до {@code add(other.negate(), visualize)}, тому візуалізація
+     * показує фактичну операцію над модулями (додавання або віднімання).
      */
     public StringNumeric sub(StringNumeric other, boolean visualize) {
         return add(other.negate(), visualize);
     }
     
+    /** Віднімає {@code other} від цього значення. */
     public StringNumeric sub(StringNumeric other) {
         return sub(other, false);
     }
 
-    // --- mul ---
+    // --- множення ---
     /**
-     * Multiplies this value by {@code other}. If {@code visualize} is
-     * {@code true}, prints schoolbook-style multiplication to
-     * {@code System.out}.
+     * Множить це значення на {@code other}.
+     * Якщо {@code visualize == true} — виводить шкільний запис множення стовпчиком до {@code System.out}.
      */
     public StringNumeric mul(StringNumeric other, boolean visualize) {
         if (this.isZero() || other.isZero()) {
@@ -183,15 +219,17 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                : mag;
     }
     
+    /** Множить це значення на {@code other}. */
     public StringNumeric mul(StringNumeric other) {
         return mul(other, false);
     }
 
-    // --- div ---
+    // --- ділення ---
     /**
-     * Divides this value by {@code other}. Throws ArithmeticException if
-     * dividing by zero. If {@code visualize} is true, prints long division
-     * visualization.
+     * Ділить це значення на {@code other} з точністю {@code precision} знаків після коми.
+     * Якщо {@code visualize == true} — виводить шкільний запис ділення стовпчиком до {@code System.out}.
+     *
+     * @throws ArithmeticException якщо {@code other} дорівнює нулю
      */
     public StringNumeric div(StringNumeric other, int precision, boolean visualize) {
         if (other.isZero()) {
@@ -210,19 +248,26 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                : mag;
     }
     
+    /** Ділить на {@code other} з точністю 10 знаків після коми. */
     public StringNumeric div(StringNumeric other) {
         return div(other, 10, false);
     }
-    
+
+    /** Ділить на {@code other} з вказаною точністю {@code precision} знаків після коми. */
     public StringNumeric div(StringNumeric other, int precision) {
         return div(other, precision, false);
     }
-    
+
+    /** Ділить на {@code other} з точністю 10 знаків після коми та виводить візуалізацію. */
     public StringNumeric div(StringNumeric other, boolean visualize) {
         return div(other, 10, visualize);
     }
 
-    // -- magnitudes --
+    // -- операції над модулями --
+    /**
+     * Порівнює модулі двох чисел, не враховуючи знак.
+     * Повертає від'ємне значення, нуль або додатне залежно від того, чи {@code |a| < |b|}, {@code |a| == |b|} чи {@code |a| > |b|}.
+     */
     private static int compareMagnitudes(StringNumeric a, StringNumeric b) {
         int maxScale = Math.max(a.scale, b.scale);
         String as = a.digits + "0".repeat(maxScale - a.scale);
@@ -233,6 +278,13 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return as.compareTo(bs);
     }
     
+    /**
+     * Спільне ядро для додавання й віднімання модулів.
+     * Вирівнює обидва операнди за десятковою крапкою, потім обходить розряди справа наліво,
+     * застосовуючи {@code operation} до кожної пари цифр разом із переносом/позикою.
+     *
+     * @param isAddition {@code true} — будує візуалізацію додавання, {@code false} — віднімання
+     */
     private static StringNumeric magnitudes(
             StringNumeric a,
             StringNumeric b,
@@ -289,6 +341,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return normalize(resultStr, maxScale);
     }
     
+    /** Складає модулі двох чисел. Передумова: обидва ненегативні. */
     private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         return magnitudes(a, b, visualize,
                 (da, db, cin) -> {
@@ -298,6 +351,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 true);
     }
     
+    /**
+     * Віднімає модуль {@code b} від модуля {@code a}.
+     * Передумова: {@code |a| >= |b|} — гарантується викликачем ({@code add()}).
+     */
     private static StringNumeric subMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         // precondition: |a| >= |b| вже гарантується в add()
         return magnitudes(a, b, visualize,
@@ -312,6 +369,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 false);
     }
     
+    /**
+     * Множить модулі двох чисел шкільним алгоритмом: для кожної цифри множника
+     * обчислюється частковий добуток, потім усі часткові добутки підсумовуються.
+     */
     private static StringNumeric multiplyMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         if (a.isZero() || b.isZero()) {
             if (visualize) {
@@ -394,6 +455,19 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return normalize(resultDigits, totalScale);
     }
     
+    /**
+     * Ділить модуль {@code dividend} на модуль {@code divisor} довгим діленням «в стовпчик».
+     *
+     * <p>Алгоритм:
+     * <ol>
+     *   <li>Обидва операнди зводяться до цілих чисел через спільний {@code scale}.</li>
+     *   <li>Цифри діленого знімаються по одній; якщо поточний залишок більший або
+     *       рівний дільнику — обчислюється цифра частки через {@link BigInteger} (O(1)),
+     *       інакше цифра частки дорівнює 0.</li>
+     *   <li>Після вичерпання цифр діленого знімаються нулі (дробова частина) доти,
+     *       доки не набрано {@code precision} знаків після коми.</li>
+     * </ol>
+     */
     private static StringNumeric divideMagnitudes(StringNumeric dividend, StringNumeric divisor, int precision, boolean visualize) {
         // 1. Приводимо до цілих чисел (прибираємо кому)
         // Наприклад: 4.8 / 1.2 -> 48 / 12
@@ -483,9 +557,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return new StringNumeric(resultStr);
     }
 
-    // -- visualization--
+    // -- візуалізація --
     /**
-     * Builds a column-style visualization of addition, for example:
+     * Будує шкільний запис додавання в стовпчик, наприклад:
      * <pre>
      *  1
      *  48.12
@@ -500,25 +574,35 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     /**
-     * Builds a column-style visualization of subtraction, for example:
+     * Будує шкільний запис віднімання в стовпчик, наприклад:
      * <pre>
      *  1
      *  52
      * -27
      *  --
      *  25
-     * </pre> The {@code 1} above a digit marks that it was borrowed from
-     * (effectively reduced by 1).
+     * </pre>
+     * Цифра {@code 1} над розрядом означає, що з нього була взята позика
+     * (фактично він зменшується на 1).
      */
     private static String buildSubVisualization(String aRaw, String bRaw, String resultRaw,
                                                 int[] incomingBorrow, int maxLen, int scale) {
         return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-', borrow -> '1');
     }
-    
+
+    /**
+     * Спільне ядро рендерингу для додавання та віднімання.
+     * Вставляє десяткову крапку, вирівнює рядки по правому краю,
+     * розставляє мітки переносів/позик над відповідними розрядами.
+     *
+     * @param marks        масив переносів (add) або позик (sub) по розрядах
+     * @param operationSign символ операції ({@code '+'} або {@code '-'})
+     * @param markToChar   перетворює числове значення позначки на символ для відображення
+     */
     private static String buildVisualization(String aRaw, String bRaw, String resultRaw,
                                              int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
 
-        // reinsert decimal point for display only
+        // вставляємо десяткову крапку лише для відображення
         String a = insertDot(aRaw, scale);
         String b = insertDot(bRaw, scale);
         String result = insertDot(stripLeadingZeros(resultRaw), scale);
@@ -607,6 +691,18 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return vis.toString();
     }
     
+    /**
+     * Будує шкільний запис ділення «кутиком», наприклад:
+     * <pre>
+     *  48120 │ 15678
+     *  -15678 ├────
+     *  ──────  │ 3
+     *   32342
+     *   ...
+     * </pre>
+     * {@code steps} — список пар (window, subtracted): що ділимо і що віднімаємо на кожному кроці.
+     * Якщо {@code subtracted == "0"}, цифра частки нульова — малюємо лише роздільну лінію.
+     */
     private static String buildDivVisualization(String d1, String d2, String quotient, java.util.List<String> steps) {
         StringBuilder sb = new StringBuilder();
 
@@ -685,11 +781,20 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     // --- Number ---
+    /**
+     * Повертає ціле значення (відкидає дробову частину).
+     * Якщо значення виходить за межі {@code int} — можливе переповнення.
+     */
     @Override
     public int intValue() {
         return (int) longValue();
     }
-    
+
+    /**
+     * Повертає ціле значення як {@code long} (відкидає дробову частину).
+     *
+     * @throws ArithmeticException якщо значення виходить за межі {@code long}
+     */
     @Override
     public long longValue() {
         long abs = new BigInteger(digits)
@@ -697,18 +802,24 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 .longValueExact();
         return negative ? -abs : abs;
     }
-    
+
+    /** Повертає наближене значення у типі {@code float}. */
     @Override
     public float floatValue() {
         return Float.parseFloat(toString());
     }
-    
+
+    /** Повертає наближене значення у типі {@code double}. */
     @Override
     public double doubleValue() {
         return Double.parseDouble(toString());
     }
 
     // --- Comparable ---
+    /**
+     * Порівнює це число з {@code other}.
+     * Спочатку порівнюються знаки, потім — модулі (для від'ємних: більший модуль → менше значення).
+     */
     @Override
     public int compareTo(StringNumeric other) {
         if (this.negative != other.negative) {
@@ -719,6 +830,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     // --- Object ---
+    /**
+     * Два числа рівні, якщо у них однакові {@code digits}, {@code scale} і {@code negative}.
+     * Це відповідає математичній рівності після нормалізації.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -730,21 +845,24 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return negative == sn.negative && scale == sn.scale && digits.equals(sn.digits);
     }
     
+    /** Узгоджений з {@code equals}: однакові числа мають однаковий хеш. */
     @Override
     public int hashCode() {
         return 31 * (31 * digits.hashCode() + scale) + Boolean.hashCode(negative);
     }
-    
+
+    /** Повертає десяткове рядкове представлення з десятковою крапкою та знаком (якщо від'ємне). */
     @Override
     public String toString() {
         String abs = insertDot(digits, scale);
         return negative ? "-" + abs : abs;
     }
 
-    // --- helpers ---
+    // --- допоміжні методи ---
     /**
-     * Inserts a decimal point {@code scale} places from the right, or returns
-     * {@code s} as-is.
+     * Вставляє десяткову крапку на {@code scale} позицій від правого краю рядка цифр.
+     * Якщо {@code scale == 0} — повертає рядок без змін.
+     * Якщо цілова частина відсутня (наприклад {@code scale >= s.length()}) — додає {@code "0."} і нулі-заповнювачі.
      */
     private static String insertDot(String s, int scale) {
         if (scale == 0) {
@@ -757,6 +875,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return "0." + "0".repeat(-intLen) + s;
     }
     
+    /** Вирівнює рядок {@code s} по правому краю до ширини {@code width} пробілами зліва. */
     private static String padLeft(String s, int width) {
         if (s.length() >= width) {
             return s;
@@ -765,9 +884,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     /**
-     * Strips trailing fractional zeros, strips leading zeros, and wraps into a
-     * StringNumeric. Always returns a non-negative result; the caller applies
-     * the sign.
+     * Нормалізує рядок цифр: прибирає хвостові нулі дробової частини та провідні нулі,
+     * і повертає ненегативний {@code StringNumeric}. Знак застосовується викликачем.
      */
     private static StringNumeric normalize(String rawDigits, int scale) {
         returnStripZeros stripZeros = stripZeros(rawDigits, scale);
@@ -777,6 +895,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return new StringNumeric(stripZeros.digit, stripZeros.scale, false);
     }
     
+    /**
+     * Прибирає хвостові нулі дробової частини та провідні нулі, зменшуючи {@code scale} відповідно.
+     * Якщо після очищення рядок порожній — повертає {@code "0"}.
+     */
     private static returnStripZeros stripZeros(String rawDigits, int scale) {
         String d = stripLeadingZeros(rawDigits);
         int s = scale;
@@ -788,6 +910,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return new returnStripZeros(d, s);
     }
     
+    /** Прибирає провідні нулі з рядка цифр; порожній рядок повертається без змін. */
     private static String stripLeadingZeros(String s) {
         return s.replaceAll("^0+", "");
     }
