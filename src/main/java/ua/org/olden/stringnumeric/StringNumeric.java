@@ -168,6 +168,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     // --- знак ---
     /**
      * Повертає нове значення з протилежним знаком; {@code negate(0) == 0}.
+     * @return 
      */
     public StringNumeric negate() {
         if (isZero()) {
@@ -218,6 +219,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
     /**
      * Додає {@code other} до цього значення.
+     * @param other
+     * @return 
      */
     public StringNumeric add(StringNumeric other) {
         return add(other, false);
@@ -321,6 +324,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     /**
      * Ділить на {@code other} з вказаною точністю {@code precision} знаків
      * після коми.
+     * @param other
+     * @param precision
+     * @return 
      */
     public StringNumeric div(StringNumeric other, int precision) {
         return div(other, precision, false);
@@ -329,6 +335,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     /**
      * Ділить на {@code other} з точністю 10 знаків після коми та виводить
      * візуалізацію.
+     * @param other
+     * @param visualize
+     * @return 
      */
     public StringNumeric div(StringNumeric other, boolean visualize) {
         return div(other, 10, visualize);
