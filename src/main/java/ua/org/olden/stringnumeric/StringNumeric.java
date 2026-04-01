@@ -9,21 +9,21 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class StringNumeric extends Number implements Comparable<StringNumeric> {
-
+    
     private static final Pattern VALUE_PATTERN = Pattern.compile("(\\d+)(?:\\.(\\d+))?");
-
+    
     private final String digits;   // all significant digits without decimal point
     private final int scale;       // number of decimal places (0 = integer)
     private final boolean negative; // true if value is negative (always false for zero)
 
     private record ColumnResult(int digit, int nextTransfer) {
-
+        
     }
-
+    
     private record returnStripZeros(String digit, int scale) {
-
+        
     }
-
+    
     @FunctionalInterface
     private interface ColumnOperation {
 
@@ -32,9 +32,13 @@ public final class StringNumeric extends Number implements Comparable<StringNume
          */
         ColumnResult apply(int digitA, int digitB, int incoming);
     }
-
+    
     public StringNumeric(String value) {
-        if (value == null || value.isBlank()) {
+        if (value == null) {
+            throw new IllegalArgumentException("Value must not be null or blank");
+        }
+        value = value.strip();
+        if (value.isBlank()) {
             throw new IllegalArgumentException("Value must not be null or blank");
         }
         boolean neg = value.startsWith("-");
@@ -46,9 +50,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         String intPart = m.group(1);
         String fracPart = m.group(2) != null ? m.group(2) : "";
-
+        
         returnStripZeros stripZeros = stripZeros(intPart + fracPart, fracPart.length());
-        if (stripZeros.digit.isEmpty()) {
+
+        if (stripZeros.digit.isEmpty() || stripZeros.digit.equalsIgnoreCase("0")) {
             this.digits = "0";
             this.scale = 0;
         } else {
@@ -57,11 +62,11 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         this.negative = neg && !stripZeros.digit.equals("0"); // -0 normalises to 0
     }
-
+    
     public StringNumeric(int value) {
         this((long) value);
     }
-
+    
     public StringNumeric(long value) {
         this.negative = value < 0;
         this.digits = Long.toString(Math.abs(value));
@@ -83,7 +88,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     public StringNumeric(float value, int scale) {
         this(formatFloating(value, scale));
     }
-
+    
     private static String formatFloating(double value, int scale) {
         if (scale < 0) {
             throw new IllegalArgumentException("Scale must be non-negative");
@@ -111,7 +116,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         return new StringNumeric(digits, scale, !negative);
     }
-
+    
     public boolean isZero() {
         return digits.equals("0"); // after normalisation zero always has scale == 0
     }
@@ -140,7 +145,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                ? new StringNumeric(mag.digits, mag.scale, true)
                : mag;
     }
-
+    
     public StringNumeric add(StringNumeric other) {
         return add(other, false);
     }
@@ -154,7 +159,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     public StringNumeric sub(StringNumeric other, boolean visualize) {
         return add(other.negate(), visualize);
     }
-
+    
     public StringNumeric sub(StringNumeric other) {
         return sub(other, false);
     }
@@ -169,15 +174,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         if (this.isZero() || other.isZero()) {
             return new StringNumeric("0", 0, false);
         }
-
+        
         boolean resultNegative = this.negative != other.negative;
         StringNumeric mag = multiplyMagnitudes(this, other, visualize);
-
+        
         return (resultNegative && !mag.isZero())
                ? new StringNumeric(mag.digits, mag.scale, true)
                : mag;
     }
-
+    
     public StringNumeric mul(StringNumeric other) {
         return mul(other, false);
     }
@@ -195,24 +200,24 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         if (this.isZero()) {
             return new StringNumeric("0", 0, false);
         }
-
+        
         boolean resultNegative = this.negative != other.negative;
-
+        
         StringNumeric mag = divideMagnitudes(this, other, precision, visualize);
-
+        
         return (resultNegative && !mag.isZero())
                ? new StringNumeric(mag.digits, mag.scale, true)
                : mag;
     }
-
+    
     public StringNumeric div(StringNumeric other) {
         return div(other, 10, false);
     }
-
+    
     public StringNumeric div(StringNumeric other, int precision) {
         return div(other, precision, false);
     }
-
+    
     public StringNumeric div(StringNumeric other, boolean visualize) {
         return div(other, 10, visualize);
     }
@@ -227,7 +232,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         return as.compareTo(bs);
     }
-
+    
     private static StringNumeric magnitudes(
             StringNumeric a,
             StringNumeric b,
@@ -241,10 +246,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         String as = a.digits + "0".repeat(maxScale - a.scale);
         String bs = b.digits + "0".repeat(maxScale - b.scale);
         int maxLen = Math.max(as.length(), bs.length());
-
+        
         String pa = "0".repeat(maxLen - as.length()) + as;
         String pb = "0".repeat(maxLen - bs.length()) + bs;
-
+        
         int[] transfer = new int[maxLen + 1];           // для add — carry, для sub — borrow
         int[] resultDigits = new int[maxLen + 1];
 
@@ -253,12 +258,12 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             int i = maxLen - 1 - col;
             int da = pa.charAt(i) - '0';
             int db = pb.charAt(i) - '0';
-
+            
             ColumnResult res = operation.apply(da, db, transfer[col]);
             resultDigits[maxLen - col] = res.digit();   // результат цифри
             transfer[col + 1] = res.nextTransfer();     // наступний перенос/позика
         }
-
+        
         resultDigits[0] = transfer[maxLen];       // для sub завжди 0 (precondition |a| >= |b|)
 
         // === побудова рядка (тепер однакова для add і sub) ===
@@ -280,10 +285,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 // transfer тут виконує роль incomingBorrow — значення ті самі (0/1)
             }
         }
-
+        
         return normalize(resultStr, maxScale);
     }
-
+    
     private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         return magnitudes(a, b, visualize,
                 (da, db, cin) -> {
@@ -292,7 +297,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 },
                 true);
     }
-
+    
     private static StringNumeric subMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         // precondition: |a| >= |b| вже гарантується в add()
         return magnitudes(a, b, visualize,
@@ -306,7 +311,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 },
                 false);
     }
-
+    
     private static StringNumeric multiplyMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         if (a.isZero() || b.isZero()) {
             if (visualize) {
@@ -314,27 +319,27 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             }
             return new StringNumeric("0", 0, false);
         }
-
+        
         String da = a.digits;
         String db = b.digits;
         int lenA = da.length();
         int lenB = db.length();
-
+        
         String[] partialProducts = new String[lenB];
         int[] res = new int[lenA + lenB];
-
+        
         for (int j = lenB - 1; j >= 0; j--) {
             int digitB = db.charAt(j) - '0';
             int shift = lenB - 1 - j;
-
+            
             if (digitB == 0) {
                 partialProducts[shift] = "0";
                 continue;
             }
-
+            
             StringBuilder partial = new StringBuilder();
             int carry = 0;
-
+            
             for (int i = lenA - 1; i >= 0; i--) {
                 int product = (da.charAt(i) - '0') * digitB + carry;
                 partial.append(product % 10);
@@ -344,10 +349,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 partial.append(carry % 10);
                 carry /= 10;
             }
-
+            
             String part = partial.reverse().toString();
             partialProducts[shift] = part;
-
+            
             for (int k = 0; k < part.length(); k++) {
                 int digit = part.charAt(part.length() - 1 - k) - '0';
                 res[res.length - 1 - k - shift] += digit;
@@ -361,7 +366,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             res[i] = temp % 10;
             carry = temp / 10;
         }
-
+        
         StringBuilder sb = new StringBuilder();
         boolean leading = true;
         for (int digit : res) {
@@ -372,9 +377,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             sb.append(digit);
         }
         String resultDigits = sb.length() == 0 ? "0" : sb.toString();
-
+        
         int totalScale = a.scale + b.scale;
-
+        
         if (visualize) {
             String aDisplay = a.toString();           // зі знаком!
             String bDisplay = b.toString();           // зі знаком!
@@ -382,13 +387,13 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             if (a.negative != b.negative && !resultDigits.equals("0")) {
                 resultDisplay = "-" + resultDisplay;
             }
-
+            
             System.out.println(buildMulVisualization(aDisplay, bDisplay, resultDisplay, partialProducts));
         }
-
+        
         return normalize(resultDigits, totalScale);
     }
-
+    
     private static StringNumeric divideMagnitudes(StringNumeric dividend, StringNumeric divisor, int precision, boolean visualize) {
         // 1. Приводимо до цілих чисел (прибираємо кому)
         // Наприклад: 4.8 / 1.2 -> 48 / 12
@@ -399,7 +404,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         // Прибираємо ведучі нулі для коректної роботи
         d1Digits = stripLeadingZeros(d1Digits);
         d2Digits = stripLeadingZeros(d2Digits);
-
+        
         StringNumeric div = new StringNumeric(d2Digits);
         StringBuilder quotient = new StringBuilder();
         String currentRemainder = "";
@@ -411,19 +416,19 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         // 2. Визначаємо, скільки знаків після коми ми хочемо (наприклад, 10)
         int totalDigitsToProcess = d1Digits.length() + precision;
         int dotPosition = d1Digits.length();
-
+        
         for (int i = 0; i < totalDigitsToProcess; i++) {
             // Беремо наступну цифру або 0, якщо цифри діленого закінчилися
             char nextDigit = (i < d1Digits.length()) ? d1Digits.charAt(i) : '0';
             currentRemainder = stripLeadingZeros(currentRemainder + nextDigit);
-
+            
             if (currentRemainder.isEmpty()) {
                 currentRemainder = "0";
             }
-
+            
             StringNumeric window = new StringNumeric(currentRemainder);
             int qDigit = 0;
-
+            
             if (window.compareTo(div) >= 0) {
 //                // Підбираємо цифру частки
 //                while (window.compareTo(div) >= 0) {
@@ -443,7 +448,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                                 ).toString()
                 );
             }
-
+            
             if (qDigit > 0) {
                 hasStarted = true;
             }
@@ -457,7 +462,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                     steps.add("0");
                 }
             }
-
+            
             quotient.append(qDigit);
             currentRemainder = window.digits;
 
@@ -466,7 +471,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 quotient.append('.');
             }
         }
-
+        
         String resultStr = quotient.toString();
         // Якщо візуалізація увімкнена, тут можна викликати оновлений buildDivVisualization
         // з використанням зібраних steps
@@ -474,7 +479,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         if (visualize) {
             System.out.println(buildDivVisualization(d1Digits, d2Digits, resultStr, steps));
         }
-
+        
         return new StringNumeric(resultStr);
     }
 
@@ -509,7 +514,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                                                 int[] incomingBorrow, int maxLen, int scale) {
         return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-', borrow -> '1');
     }
-
+    
     private static String buildVisualization(String aRaw, String bRaw, String resultRaw,
                                              int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
 
@@ -517,13 +522,13 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         String a = insertDot(aRaw, scale);
         String b = insertDot(bRaw, scale);
         String result = insertDot(stripLeadingZeros(resultRaw), scale);
-
+        
         int dw = Math.max(Math.max(a.length(), b.length()), result.length());
 
         // marks[] — це або carryInto (для додавання), або incomingBorrow (для віднімання)
         char[] markChars = new char[dw];
         Arrays.fill(markChars, ' ');
-
+        
         for (int col = 1; col <= maxLen; col++) {
             if (marks[col] > 0) {
                 int dotShift = (scale > 0 && col >= scale) ? 1 : 0;
@@ -533,16 +538,16 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 }
             }
         }
-
+        
         String markLine = (" " + new String(markChars)).stripTrailing();
-
+        
         StringBuilder vis = new StringBuilder();
         if (!markLine.isBlank()) {
             vis
                     .append(markLine)
                     .append('\n');
         }
-
+        
         vis
                 .append(' ')
                 .append(padLeft(a, dw))
@@ -555,7 +560,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 .append('\n')
                 .append(' ')
                 .append(padLeft(result, dw));
-
+        
         return vis.toString();
     }
 
@@ -569,9 +574,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 maxWidth = Math.max(maxWidth, p.length() + 4);
             }
         }
-
+        
         StringBuilder vis = new StringBuilder();
-
+        
         vis
                 .append(padLeft(aStr, maxWidth))
                 .append('\n')
@@ -587,21 +592,21 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             if (part == null || (part.equals("0") && partials.length > 1)) {
                 continue;
             }
-
+            
             String shifted = padLeft(part, maxWidth - i) + " ".repeat(i);
             vis
                     .append(shifted)
                     .append('\n');
         }
-
+        
         vis
                 .append("─".repeat(maxWidth))
                 .append('\n')
                 .append(padLeft(resultStr, maxWidth));
-
+        
         return vis.toString();
     }
-
+    
     private static String buildDivVisualization(String d1, String d2, String quotient, java.util.List<String> steps) {
         StringBuilder sb = new StringBuilder();
 
@@ -618,9 +623,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         if (cleanQuotient.startsWith(".")) {
             cleanQuotient = "0" + cleanQuotient;
         }
-
+        
         int currentPos = 0;
-
+        
         for (int i = 0; i < steps.size(); i += 2) {
             String window = steps.get(i);      // Що зараз ділимо (напр. 48120)
             String subtracted = steps.get(i + 1); // Що віднімаємо (напр. 47034)
@@ -636,7 +641,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                         .append(window)
                         .append("\n");
             }
-
+            
             if (subtracted.equals("0")) {
                 // Нульова цифра частки: знесене число менше дільника, рядок віднімання не потрібен
                 sb.append(indent).append("─".repeat(window.length() + 1)).append("\n");
@@ -672,10 +677,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             if (window.equals(subtracted)) {
                 remainderLen = 0;
             }
-
+            
             currentPos += (window.length() - remainderLen);
         }
-
+        
         return sb.toString();
     }
 
@@ -684,7 +689,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     public int intValue() {
         return (int) longValue();
     }
-
+    
     @Override
     public long longValue() {
         long abs = new BigInteger(digits)
@@ -692,12 +697,12 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 .longValueExact();
         return negative ? -abs : abs;
     }
-
+    
     @Override
     public float floatValue() {
         return Float.parseFloat(toString());
     }
-
+    
     @Override
     public double doubleValue() {
         return Double.parseDouble(toString());
@@ -724,12 +729,12 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         return negative == sn.negative && scale == sn.scale && digits.equals(sn.digits);
     }
-
+    
     @Override
     public int hashCode() {
         return 31 * (31 * digits.hashCode() + scale) + Boolean.hashCode(negative);
     }
-
+    
     @Override
     public String toString() {
         String abs = insertDot(digits, scale);
@@ -751,7 +756,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         return "0." + "0".repeat(-intLen) + s;
     }
-
+    
     private static String padLeft(String s, int width) {
         if (s.length() >= width) {
             return s;
@@ -771,7 +776,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         return new StringNumeric(stripZeros.digit, stripZeros.scale, false);
     }
-
+    
     private static returnStripZeros stripZeros(String rawDigits, int scale) {
         String d = stripLeadingZeros(rawDigits);
         int s = scale;
@@ -779,9 +784,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             d = d.substring(0, d.length() - 1);
             s--;
         }
+        d = d.isEmpty() ? "0" : d;
         return new returnStripZeros(d, s);
     }
-
+    
     private static String stripLeadingZeros(String s) {
         return s.replaceAll("^0+", "");
     }

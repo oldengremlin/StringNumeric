@@ -360,9 +360,9 @@ class StringNumericTest {
 
         String out = buf.toString().stripTrailing();
         assertTrue(out.contains("100"), "should contain dividend");
-        assertTrue(out.contains("4"),   "should contain divisor");
-        assertTrue(out.contains("25"),  "should contain quotient");
-        assertTrue(out.contains("-8"),  "should show first subtraction");
+        assertTrue(out.contains("4"), "should contain divisor");
+        assertTrue(out.contains("25"), "should contain quotient");
+        assertTrue(out.contains("-8"), "should show first subtraction");
         assertTrue(out.contains("-20"), "should show second subtraction");
     }
 

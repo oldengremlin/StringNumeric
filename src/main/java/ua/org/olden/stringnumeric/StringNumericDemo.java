@@ -5,6 +5,9 @@ public class StringNumericDemo {
     public static void main(String[] args) {
 
         section("Конструктори");
+        demo("String", new StringNumeric("-0.00"));
+        demo("String", new StringNumeric("-0.0"));
+        demo("String", new StringNumeric("-0"));
         demo("String", new StringNumeric("48.12"));
         demo("int", new StringNumeric(42));
         demo("long", new StringNumeric(123_456_789_012_345L));
