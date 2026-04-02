@@ -502,4 +502,138 @@ class StringNumericTest {
         assertEquals(-42.0f, n.floatValue());
         assertEquals(-42.0, n.doubleValue());
     }
+
+    // ── toBigInteger ──────────────────────────────────────────────────────────
+    @Test
+    void testToBigInteger() {
+        assertEquals("5",  new StringNumeric("5").toBigInteger().toString());
+        assertEquals("3",  new StringNumeric("3.7").toBigInteger().toString());  // truncates
+        assertEquals("2",  new StringNumeric("2.25").toBigInteger().toString()); // truncates
+        assertEquals("0",  new StringNumeric("0.99").toBigInteger().toString()); // < 1 → 0
+        assertEquals("-5", new StringNumeric("-5.9").toBigInteger().toString()); // negative
+    }
+
+    // ── sqrtApproximate ───────────────────────────────────────────────────────
+    @Test
+    void testSqrtApproximateIntegers() {
+        // Для perfect-square результат точний
+        assertEquals("1", new StringNumeric("1").sqrtApproximate().toString());
+        assertEquals("3", new StringNumeric("9").sqrtApproximate().toString());
+        assertEquals("10", new StringNumeric("100").sqrtApproximate().toString());
+    }
+
+    @Test
+    void testSqrtApproximateDecimalDoesNotThrow() {
+        // Раніше падало з NumberFormatException
+        assertDoesNotThrow(() -> new StringNumeric("2.25").sqrtApproximate());
+        assertDoesNotThrow(() -> new StringNumeric("0.25").sqrtApproximate());
+        assertDoesNotThrow(() -> new StringNumeric("0.0001").sqrtApproximate());
+    }
+
+    @Test
+    void testSqrtApproximateNegativeThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new StringNumeric("-4").sqrtApproximate());
+    }
+
+    // ── sqrtIterative (Герон) ─────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "4,   0,  2",
+        "9,   0,  3",
+        "100, 0,  10",
+        "1,   0,  1",
+        "0,   0,  0",
+    })
+    void testSqrtIterativeInteger(String a, int precision, String expected) {
+        assertEquals(expected,
+                new StringNumeric(a).sqrtIterative(precision).toString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "2.25, 4, 1.5",
+        "0.25, 4, 0.5",
+        "6.25, 4, 2.5",
+        "0.01, 4, 0.1",
+    })
+    void testSqrtIterativeDecimal(String a, int precision, String expected) {
+        assertEquals(expected,
+                new StringNumeric(a).sqrtIterative(precision).toString());
+    }
+
+    @Test
+    void testSqrtIterativeNegativeThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new StringNumeric("-4").sqrtIterative());
+    }
+
+    // ── sqrtLongDivision (в стовпчик) ─────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "4,   0,  2",
+        "9,   0,  3",
+        "100, 0,  10",
+        "25,  0,  5",
+        "1,   0,  1",
+        "0,   0,  0",
+    })
+    void testSqrtLongDivisionInteger(String a, int precision, String expected) {
+        assertEquals(expected,
+                new StringNumeric(a).sqrtLongDivision(precision).toString());
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        "2.25,   0,  1.5",
+        "0.25,   0,  0.5",
+        "6.25,   0,  2.5",
+        "0.0025, 0,  0.05",
+        "56.25,  0,  7.5",
+    })
+    void testSqrtLongDivisionDecimal(String a, int precision, String expected) {
+        assertEquals(expected,
+                new StringNumeric(a).sqrtLongDivision(precision).toString());
+    }
+
+    @Test
+    void testSqrtLongDivisionWithPrecision() {
+        // sqrt(2) ≈ 1.41421356...
+        String result = new StringNumeric("2").sqrtLongDivision(4).toString();
+        assertTrue(result.startsWith("1.4142"), "sqrt(2) should start with 1.4142, got: " + result);
+    }
+
+    @Test
+    void testSqrtLongDivisionDecimalWithPrecision() {
+        // sqrt(2.25) = 1.5 точно, precision=4 дає 1.5000
+        String result = new StringNumeric("2.25").sqrtLongDivision(4).toString();
+        assertEquals("1.5", result); // trailing zeros normalised
+    }
+
+    @Test
+    void testSqrtLongDivisionNegativeThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new StringNumeric("-9").sqrtLongDivision());
+    }
+
+    @Test
+    void testSqrtLongDivisionVisualizationProducesOutput() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("144").sqrtLongDivision(0, true);
+        System.setOut(original);
+        assertFalse(buf.toString().isEmpty(), "visualize=true should produce output");
+    }
+
+    @Test
+    void testSqrtLongDivisionWithoutVisualizationProducesNoOutput() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("144").sqrtLongDivision(0, false);
+        new StringNumeric("144").sqrtLongDivision(0);
+        System.setOut(original);
+        assertTrue(buf.toString().isEmpty());
+    }
 }
