@@ -701,10 +701,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             String remRight = remStr.substring(remStr.length() > 2 ? remStr.length() - 2 : remStr.length());
 
             // Малюємо поточний етап
-            sb.append(String.format(" %s%s │ %s %s\n",
+            sb.append(String.format(" %s%s │ %s %s %s\n",
                     indentation,
                     padLeft(remStr, precision + (int) precision / 2),
-                    remLeft, remRight));
+                    line3, remLeft, remRight));
 
             sb.append(String.format("-%s%s │ %d%s(%s × 2 × 10 + %d) × %d = %s\n",
                     indentation,
