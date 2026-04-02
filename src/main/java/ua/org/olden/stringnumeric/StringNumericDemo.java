@@ -210,7 +210,9 @@ public class StringNumericDemo {
         sqrt("10");
         sqrt("250");
         sqrt("5253");
-        sqrt("100500");
+        sqrt("52.53");
+        sqrt("100.500");
+        sqrt("109912");
     }
 
     // --- helpers ---

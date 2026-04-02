@@ -366,8 +366,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         // Для дробових чисел беремо цілу частину (таблиця квадратів — ціла)
         BigInteger target = scale == 0
-                ? new BigInteger(digits)
-                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+                            ? new BigInteger(digits)
+                            : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
         return generateBigSquareTable(target);
     }
 
@@ -411,8 +411,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         // Для дробових чисел беремо цілу частину як наближення —
         // достатньо для початкового наближення методу Герона
         BigInteger target = scale == 0
-                ? new BigInteger(digits)
-                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+                            ? new BigInteger(digits)
+                            : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
 
         BigInteger[][] table = generateBigSquareTable(target);
 
@@ -686,16 +686,34 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         String subStr = subtrahend.toString();
 
         if (step == 0) {
+            String line1 = "─".repeat(precision + ((int) precision / 2) + 4);
             // Перший крок: малюємо заголовок
-            sb.append(String.format("√%s | %d\n", padLeft(remStr, precision + (int) precision / 2), x));
+            sb.append(String.format("√ %s   │\n", padLeft(remStr, precision + (int) precision / 2 - 1)));
+            sb.append(String.format("  %s   │ %d\n", padLeft(String.valueOf(x * x), precision + (int) precision / 2 - 1), x));
+            sb.append(line1.concat("┼───\n"));
         } else {
-            // Малюємо поточний етап
-            sb.append(String.format(" %s │\n", padLeft(remStr, precision + (int) precision / 2))); // Знесена пара вже всередині remainder
-            sb.append(String.format("-%s │ (%s × 2 × 10 + %d) * %d = %s\n",
-                    padLeft(subStr, precision + ((int) precision / 2)), p, x, x, subStr));
+            String indentation = " ".repeat(step * 2);
+            String line1 = "─".repeat(precision + ((int) precision / 2) + 1);
+            String line2 = "─".repeat(remStr.length() + 3);
+            String line3 = " ".repeat(remStr.length() + 4);
 
-            String line = "─".repeat(precision + ((int) precision / 2) + 1);
-            sb.append(String.format("%s─┘ Додаємо %s, корінь: %s\n", line, x, currentRoot + x));
+            String remLeft = remStr.substring(0, remStr.length() > 2 ? remStr.length() - 2 : remStr.length());
+            String remRight = remStr.substring(remStr.length() > 2 ? remStr.length() - 2 : remStr.length());
+
+            // Малюємо поточний етап
+            sb.append(String.format(" %s%s │ %s %s\n",
+                    indentation,
+                    padLeft(remStr, precision + (int) precision / 2),
+                    remLeft, remRight));
+
+            sb.append(String.format("-%s%s │ %d%s(%s × 2 × 10 + %d) × %d = %s\n",
+                    indentation,
+                    padLeft(subStr, precision + ((int) precision / 2)),
+                    x, line3, p, x, x, subStr));
+
+            sb.append(String.format("%s%s─┴─┬%s Додаємо %d до результату: %s\n",
+                    indentation,
+                    line1, line2, x, currentRoot + x));
         }
     }
 
@@ -1304,13 +1322,14 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     /**
-     * Повертає ціле значення як {@link BigInteger} (відкидає дробову частину, тобто округлення вниз).
-     * Коректно працює як для цілих, так і для дробових чисел.
+     * Повертає ціле значення як {@link BigInteger} (відкидає дробову частину,
+     * тобто округлення вниз). Коректно працює як для цілих, так і для дробових
+     * чисел.
      */
     public BigInteger toBigInteger() {
         BigInteger abs = scale == 0
-                ? new BigInteger(digits)
-                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+                         ? new BigInteger(digits)
+                         : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
         return negative ? abs.negate() : abs;
     }
 
