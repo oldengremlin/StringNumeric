@@ -361,9 +361,14 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      */
     //buildSqrtVisualization()
     public BigInteger[][] generateBigSquareTable() {
-        return generateBigSquareTable(
-                new BigInteger(this.toString())
-        );
+        if (negative) {
+            throw new IllegalArgumentException("Неможливо побудувати таблицю для від'ємного числа");
+        }
+        // Для дробових чисел беремо цілу частину (таблиця квадратів — ціла)
+        BigInteger target = scale == 0
+                ? new BigInteger(digits)
+                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+        return generateBigSquareTable(target);
     }
 
     private BigInteger[][] generateBigSquareTable(BigInteger maxNumber) {
@@ -400,11 +405,14 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     public StringNumeric sqrtApproximate(boolean visualize) {
-        BigInteger target = new BigInteger(this.toString());
-
-        if (target.signum() == -1) {
+        if (this.negative) {
             throw new IllegalArgumentException("Неможливо знайти корінь з від'ємного числа");
         }
+        // Для дробових чисел беремо цілу частину як наближення —
+        // достатньо для початкового наближення методу Герона
+        BigInteger target = scale == 0
+                ? new BigInteger(digits)
+                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
 
         BigInteger[][] table = generateBigSquareTable(target);
 
@@ -497,9 +505,16 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             return new StringNumeric("0");
         }
 
-        // 1. Початкове наближення (x0). 
+        // 1. Початкове наближення (x0).
         // Можна взяти результат табличного методу як чудовий старт!
         StringNumeric x = this.sqrtApproximate(false);
+        // Для чисел між 0 і 1 (наприклад 0.25) sqrtApproximate повертає 0
+        // (ціла частина = 0) — це призведе до ділення на нуль у Героні.
+        // Використовуємо 1 як безпечне початкове наближення; Герон сходиться
+        // з будь-якого додатного старту.
+        if (x.isZero()) {
+            x = new StringNumeric("1");
+        }
         StringNumeric two = new StringNumeric("2");
 
         if (visualize) {
@@ -567,29 +582,55 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             throw new IllegalArgumentException("Корінь з від'ємного числа неможливий");
         }
 
-        // Беремо тільки цілу частину (як у вашому коді)
+        // Групуємо цифри по 2 зліва направо, включаючи дробову частину.
+        // Щоб алгоритм «пар» працював коректно, кількість знаків після коми
+        // має бути парною: якщо непарна — дописуємо один нуль праворуч.
         String numericStr = this.digits;
-        if (this.scale > 0) {
-            numericStr = this.toBigInteger().toString();
+        int adjustedScale = this.scale;
+        if (adjustedScale % 2 != 0) {
+            numericStr = numericStr + "0"; // домножаємо на 10 — коренем ділимо назад
+            adjustedScale++;
         }
+        // halfScale — кількість десяткових знаків у результаті, що припадають
+        // на «дробові пари» вихідного числа
+        int halfScale = adjustedScale / 2;
 
         if (numericStr.length() % 2 != 0) {
             numericStr = "0" + numericStr;
         }
 
+        int numericStrPairs = numericStr.length() / 2;
+        // integerPairs — скільки пар дають цілу частину кореня (може бути 0)
+        int integerPairs = numericStrPairs - halfScale;
+        // де вставити крапку в resRoot (0 = перед першою цифрою → «0.xxx»)
+        int decimalPointAt = Math.max(integerPairs, 0);
+
         StringBuilder resRoot = new StringBuilder();
         StringNumeric remainder = new StringNumeric("0");
         StringBuilder visualLog = new StringBuilder();
 
-        int decimalPointAt = numericStr.length() / 2;
-        int totalSteps = decimalPointAt + precision;
+        // Якщо число суто дробове (0.25, 0.0025 тощо), результат починається з «0.»
+        // і може мати додаткові нулі після крапки.
+        // Крапка потрібна якщо: є дробові цифри з вхідного числа (halfScale > 0)
+        // або якщо калькуляції запитано decimal precision > 0.
+        if (integerPairs <= 0) {
+            resRoot.append("0");
+            if (halfScale > 0 || precision > 0) {
+                resRoot.append(".");
+                for (int k = 0; k < -integerPairs; k++) {
+                    resRoot.append("0");
+                }
+            }
+        }
+
+        int totalSteps = numericStrPairs + precision;
 
         if (visualize) {
             visualLog.append(String.format("Добування кореня для %s:\n\n", this));
         }
 
         for (int i = 0; i < totalSteps; i++) {
-            String pair = (i < decimalPointAt) ? numericStr.substring(i * 2, i * 2 + 2) : "00";
+            String pair = (i < numericStrPairs) ? numericStr.substring(i * 2, i * 2 + 2) : "00";
             remainder = new StringNumeric(remainder.isZero() ? pair : remainder.toString() + pair);
 
             // КРИТИЧНЕ ВИПРАВЛЕННЯ: Для p беремо корінь як ціле число (без крапки)
@@ -620,7 +661,11 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             remainder = remainder.sub(subtrahend);
             resRoot.append(x);
 
-            if (i + 1 == decimalPointAt && precision > 0) {
+            // Крапку вставляємо якщо є ціла частина (integerPairs > 0),
+            // позиція крапки досягнута, і або потрібна decimal precision,
+            // або вхідне число саме дробове (halfScale > 0 дає «реальні» десяткові цифри).
+            // Якщо число дробове — «0.» вже додано до циклу.
+            if (integerPairs > 0 && i + 1 == decimalPointAt && (precision > 0 || halfScale > 0)) {
                 resRoot.append(".");
             }
         }
@@ -1258,8 +1303,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return Double.parseDouble(toString());
     }
 
+    /**
+     * Повертає ціле значення як {@link BigInteger} (відкидає дробову частину, тобто округлення вниз).
+     * Коректно працює як для цілих, так і для дробових чисел.
+     */
     public BigInteger toBigInteger() {
-        return new BigInteger(this.toString());
+        BigInteger abs = scale == 0
+                ? new BigInteger(digits)
+                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+        return negative ? abs.negate() : abs;
     }
 
     // --- Comparable ---
