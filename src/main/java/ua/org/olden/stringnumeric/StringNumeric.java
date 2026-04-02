@@ -36,6 +36,12 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     private final int scale;       // кількість знаків після коми (0 = ціле число)
     private final boolean negative; // true якщо число від'ємне (для нуля завжди false)
 
+    // Граничне значення для BigInteger, яке відповідає Integer.MAX_VALUE рядків
+    // Оскільки 1 рядок = 10 чисел, то ліміт = Integer.MAX_VALUE * 10 + 9
+    private final BigInteger MAX_SUPPORTED_NUMBER = BigInteger.valueOf(Integer.MAX_VALUE)
+            .multiply(BigInteger.TEN)
+            .add(BigInteger.valueOf(9));
+
     /**
      * Результат однієї колонкової операції: цифра результату та перенос/позика
      * на наступний розряд.
@@ -168,7 +174,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     // --- знак ---
     /**
      * Повертає нове значення з протилежним знаком; {@code negate(0) == 0}.
-     * @return 
+     *
+     * @return
      */
     public StringNumeric negate() {
         if (isZero()) {
@@ -219,8 +226,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
     /**
      * Додає {@code other} до цього значення.
+     *
      * @param other
-     * @return 
+     * @return
      */
     public StringNumeric add(StringNumeric other) {
         return add(other, false);
@@ -324,9 +332,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     /**
      * Ділить на {@code other} з вказаною точністю {@code precision} знаків
      * після коми.
+     *
      * @param other
      * @param precision
-     * @return 
+     * @return
      */
     public StringNumeric div(StringNumeric other, int precision) {
         return div(other, precision, false);
@@ -335,12 +344,314 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     /**
      * Ділить на {@code other} з точністю 10 знаків після коми та виводить
      * візуалізацію.
+     *
      * @param other
      * @param visualize
-     * @return 
+     * @return
      */
     public StringNumeric div(StringNumeric other, boolean visualize) {
         return div(other, 10, visualize);
+    }
+
+    // -- квадрати --
+    /**
+     * Генерує таблицю квадратів з перевіркою лімітів Java.
+     *
+     * @return
+     */
+    //buildSqrtVisualization()
+    public BigInteger[][] generateBigSquareTable() {
+        return generateBigSquareTable(
+                new BigInteger(this.toString())
+        );
+    }
+
+    private BigInteger[][] generateBigSquareTable(BigInteger maxNumber) {
+        // Перевірка обмеження алгоритму
+        if (maxNumber.compareTo(MAX_SUPPORTED_NUMBER) > 0) {
+            throw new UnsupportedOperationException(
+                    "Number too large! Maximum supported number for table: " + MAX_SUPPORTED_NUMBER
+            );
+        }
+
+        int rowsCount = maxNumber.divide(BigInteger.TEN).intValue() + 1;
+
+        BigInteger[][] table = new BigInteger[rowsCount][10];
+
+        for (int tens = 0; tens < rowsCount; tens++) {
+            for (int units = 0; units < 10; units++) {
+                BigInteger currentNumber = BigInteger.valueOf(tens)
+                        .multiply(BigInteger.TEN)
+                        .add(BigInteger.valueOf(units));
+
+                table[tens][units] = currentNumber.multiply(currentNumber);
+            }
+        }
+        return table;
+    }
+
+    /**
+     * Шукає наближений корінь.
+     *
+     * @return
+     */
+    public StringNumeric sqrtApproximate() {
+        return sqrtApproximate(false);
+    }
+
+    public StringNumeric sqrtApproximate(boolean visualize) {
+        BigInteger target = new BigInteger(this.toString());
+
+        if (target.signum() == -1) {
+            throw new IllegalArgumentException("Неможливо знайти корінь з від'ємного числа");
+        }
+
+        BigInteger[][] table = generateBigSquareTable(target);
+
+        int bestR = 0;
+        int bestC = 0;
+        BigInteger minDifference = null;
+
+        for (int r = 0; r < table.length; r++) {
+            boolean rowExceeded = false;
+            for (int c = 0; c < table[r].length; c++) {
+                BigInteger currentSquare = table[r][c];
+                BigInteger diff = currentSquare.subtract(target).abs();
+
+                if (minDifference == null || diff.compareTo(minDifference) < 0) {
+                    minDifference = diff;
+                    bestR = r;
+                    bestC = c;
+                }
+
+                if (currentSquare.compareTo(target) > 0 && diff.compareTo(minDifference) > 0) {
+                    rowExceeded = true;
+                    break;
+                }
+            }
+            if (rowExceeded) {
+                break;
+            }
+        }
+
+        if (visualize) {
+            System.out.println(buildSqrtVisualization(target, table, bestR, bestC));
+        }
+
+        return new StringNumeric(String.valueOf(bestR) + bestC);
+    }
+
+    /**
+     * Обчислює корінь методом ітерацій (Герона). Дозволяє отримати набагато
+     * більшу точність, ніж табличний метод.
+     *
+     * @return
+     */
+    public StringNumeric sqrtIterative() {
+        return sqrtIterative(10, false);
+    }
+
+    /**
+     * Обчислює корінь методом ітерацій (Герона). Дозволяє отримати набагато
+     * більшу точність, ніж табличний метод.
+     *
+     * @param visualize
+     * @return
+     */
+    public StringNumeric sqrtIterative(boolean visualize) {
+        return sqrtIterative(10, visualize);
+    }
+
+    public StringNumeric sqrtHeron(boolean visualize) {
+        return sqrtIterative(10, visualize);
+    }
+
+    /**
+     * Обчислює корінь методом ітерацій (Герона). Дозволяє отримати набагато
+     * більшу точність, ніж табличний метод.
+     *
+     * @param precision
+     * @return
+     */
+    public StringNumeric sqrtIterative(int precision) {
+        return sqrtIterative(precision, false);
+    }
+
+    public StringNumeric sqrtHeron(int precision) {
+        return sqrtIterative(precision, false);
+    }
+
+    /**
+     * Обчислює корінь методом ітерацій (Герона). Дозволяє отримати набагато
+     * більшу точність, ніж табличний метод.
+     *
+     * @param precision
+     * @param visualize
+     * @return
+     */
+    public StringNumeric sqrtIterative(int precision, boolean visualize) {
+        if (this.negative) {
+            throw new IllegalArgumentException("Корінь з від'ємного числа не підтримується");
+        }
+        if (this.isZero()) {
+            return new StringNumeric("0");
+        }
+
+        // 1. Початкове наближення (x0). 
+        // Можна взяти результат табличного методу як чудовий старт!
+        StringNumeric x = this.sqrtApproximate(false);
+        StringNumeric two = new StringNumeric("2");
+
+        if (visualize) {
+            System.out.println("Початкове наближення: " + x);
+        }
+
+        // 2. Ітераційний процес (зазвичай 6-10 ітерацій достатньо для високої точності)
+        for (int i = 0; i < 7; i++) {
+            // Формула: x = (x + target/x) / 2
+            StringNumeric step1 = this.div(x, precision); // target / x
+            StringNumeric step2 = x.add(step1);           // x + (target / x)
+            x = step2.div(two, precision);                // сума / 2
+
+            if (visualize) {
+                System.out.printf("Ітерація %d: %s%n", i + 1, x);
+            }
+        }
+
+        return x;
+    }
+
+    public StringNumeric sqrtHeron(int precision, boolean visualize) {
+        return sqrtIterative(precision, visualize);
+    }
+
+    /**
+     * Обчислює корінь "стовпчиком" (digit-by-digit calculation).
+     *
+     * @return
+     */
+    public StringNumeric sqrtLongDivision() {
+        return sqrtLongDivision(10, false);
+    }
+
+    /**
+     * Обчислює корінь "стовпчиком" (digit-by-digit calculation).
+     *
+     * @param precision
+     * @return
+     */
+    public StringNumeric sqrtLongDivision(int precision) {
+        return sqrtLongDivision(precision, false);
+    }
+
+    /**
+     * Обчислює корінь "стовпчиком" (digit-by-digit calculation).
+     *
+     * @param visualize
+     * @return
+     */
+    public StringNumeric sqrtLongDivision(boolean visualize) {
+        return sqrtLongDivision(10, visualize);
+    }
+
+    /**
+     * Обчислює корінь "стовпчиком" (digit-by-digit calculation). Цей метод
+     * знаходить корінь по одній цифрі за ітерацію.
+     *
+     * @param precision
+     * @param visualize
+     * @return
+     */
+    public StringNumeric sqrtLongDivision(int precision, boolean visualize) {
+        if (this.negative) {
+            throw new IllegalArgumentException("Корінь з від'ємного числа неможливий");
+        }
+
+        // Беремо тільки цілу частину (як у вашому коді)
+        String numericStr = this.digits;
+        if (this.scale > 0) {
+            numericStr = this.toBigInteger().toString();
+        }
+
+        if (numericStr.length() % 2 != 0) {
+            numericStr = "0" + numericStr;
+        }
+
+        StringBuilder resRoot = new StringBuilder();
+        StringNumeric remainder = new StringNumeric("0");
+        StringBuilder visualLog = new StringBuilder();
+
+        int decimalPointAt = numericStr.length() / 2;
+        int totalSteps = decimalPointAt + precision;
+
+        if (visualize) {
+            visualLog.append(String.format("Добування кореня для %s:\n\n", this));
+        }
+
+        for (int i = 0; i < totalSteps; i++) {
+            String pair = (i < decimalPointAt) ? numericStr.substring(i * 2, i * 2 + 2) : "00";
+            remainder = new StringNumeric(remainder.isZero() ? pair : remainder.toString() + pair);
+
+            // КРИТИЧНЕ ВИПРАВЛЕННЯ: Для p беремо корінь як ціле число (без крапки)
+            String currentRootWithoutDot = resRoot.toString().replace(".", "");
+            if (currentRootWithoutDot.isEmpty()) {
+                currentRootWithoutDot = "0";
+            }
+            StringNumeric p = new StringNumeric(currentRootWithoutDot).mul(new StringNumeric("20"));
+
+            int x = 0;
+            for (int j = 1; j <= 9; j++) {
+                StringNumeric candidateX = new StringNumeric(String.valueOf(j));
+                StringNumeric val = p.add(candidateX).mul(candidateX);
+                if (val.compareTo(remainder) <= 0) {
+                    x = j;
+                } else {
+                    break;
+                }
+            }
+
+            StringNumeric xNum = new StringNumeric(String.valueOf(x));
+            StringNumeric subtrahend = p.add(xNum).mul(xNum);
+
+            if (visualize) {
+                buildClassicSqrtStep(visualLog, i, remainder, currentRootWithoutDot, x, subtrahend, resRoot.toString(), precision);
+            }
+
+            remainder = remainder.sub(subtrahend);
+            resRoot.append(x);
+
+            if (i + 1 == decimalPointAt && precision > 0) {
+                resRoot.append(".");
+            }
+        }
+
+        if (visualize) {
+            System.out.println(visualLog.toString());
+        }
+
+        return new StringNumeric(resRoot.toString());
+    }
+
+    private void buildClassicSqrtStep(StringBuilder sb, int step,
+                                      StringNumeric remainder, String p,
+                                      int x, StringNumeric subtrahend, String currentRoot,
+                                      int precision) {
+        // Рахуємо загальну довжину числа, що зараз у залишку (включаючи знесену пару)
+        String remStr = remainder.toString();
+        String subStr = subtrahend.toString();
+
+        if (step == 0) {
+            // Перший крок: малюємо заголовок
+            sb.append(String.format("√%s | %d\n", padLeft(remStr, precision + (int) precision / 2), x));
+        } else {
+            // Малюємо поточний етап
+            sb.append(String.format(" %s │\n", padLeft(remStr, precision + (int) precision / 2))); // Знесена пара вже всередині remainder
+            sb.append(String.format("-%s │ (%s × 2 × 10 + %d) * %d = %s\n",
+                    padLeft(subStr, precision + ((int) precision / 2)), p, x, x, subStr));
+
+            String line = "─".repeat(precision + ((int) precision / 2) + 1);
+            sb.append(String.format("%s─┘ Додаємо %s, корінь: %s\n", line, x, currentRoot + x));
+        }
     }
 
     // -- операції над модулями --
@@ -868,6 +1179,46 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         return sb.toString();
     }
 
+    private static String buildSqrtVisualization(BigInteger target, BigInteger[][] table, int bestR, int bestC) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Пошук наближеного кореня для: ").append(target).append("\n");
+        sb.append("Фрагмент таблиці квадратів (десятки \\ одиниці):\n\n");
+
+        // Визначаємо межі відображення (наприклад, +/- 2 рядки від знайденого)
+        int startR = Math.max(0, bestR - 2);
+        int endR = Math.min(table.length - 1, bestR + 2);
+
+        // Шапка стовпців (одиниці)
+        sb.append("   | ");
+        for (int c = 0; c < 10; c++) {
+            sb.append(String.format("%10d ", c));
+        }
+        sb.append("\n───┼─").append("───────────".repeat(10)).append("\n");
+
+        // Рядки таблиці
+        for (int r = startR; r <= endR; r++) {
+            sb.append(String.format("%2d0| ", r)); // Початок десятка
+            for (int c = 0; c < 10; c++) {
+                BigInteger val = table[r][c];
+                String cell = val.toString();
+
+                if (r == bestR && c == bestC) {
+                    // Виділяємо знайдений корінь
+                    sb.append(String.format("≈[%8s]", cell));
+                } else {
+                    sb.append(String.format("%10s ", cell));
+                }
+            }
+            sb.append("\n");
+        }
+
+        sb.append("\nНайближче значення: ").append(table[bestR][bestC]);
+        sb.append(" (різниця: ").append(table[bestR][bestC].subtract(target).abs()).append(")");
+        sb.append("\nЗнайдений корінь: ").append(bestR).append(bestC).append("\n");
+
+        return sb.toString();
+    }
+
     // --- Number ---
     /**
      * Повертає ціле значення (відкидає дробову частину). Якщо значення виходить
@@ -905,6 +1256,10 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     @Override
     public double doubleValue() {
         return Double.parseDouble(toString());
+    }
+
+    public BigInteger toBigInteger() {
+        return new BigInteger(this.toString());
     }
 
     // --- Comparable ---

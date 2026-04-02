@@ -199,29 +199,18 @@ public class StringNumericDemo {
         div("3.75", "-1.5");
 
         section("Візуалізація ділення");
-        System.out.println(new StringNumeric("48.12") + " ÷ " + new StringNumeric("15.67") + " = "
-                + new StringNumeric("48.12").div(new StringNumeric("15.67")));
-        new StringNumeric("48.12").div(new StringNumeric("15.67"), true);
-        System.out.println();
+        divVis("48.12", "15.67");
+        divVis("-100", "4");
+        divVis("1", "0.9");
+        divVis("48.12", "15.678");
+        divVis("700", "7");
 
-        System.out.println(new StringNumeric("-100") + " ÷ " + new StringNumeric("4") + " = "
-                + new StringNumeric("-100").div(new StringNumeric("4")));
-        new StringNumeric("-100").div(new StringNumeric("4"), true);
-        System.out.println();
-
-        System.out.println(new StringNumeric("1") + " ÷ " + new StringNumeric("0.9") + " = "
-                + new StringNumeric("1").div(new StringNumeric("0.9")));
-        new StringNumeric("1").div(new StringNumeric("0.9"), true);
-        System.out.println();
-
-        System.out.println(new StringNumeric("48.12") + " ÷ " + new StringNumeric("15.678") + " = "
-                + new StringNumeric("48.12").div(new StringNumeric("15.678")));
-        new StringNumeric("48.12").div(new StringNumeric("15.678"), true);
-
-        System.out.println(new StringNumeric("700") + " ÷ " + new StringNumeric("7") + " = "
-                + new StringNumeric("700").div(new StringNumeric("7")));
-        new StringNumeric("700").div(new StringNumeric("7"), true);
-
+        section("Корні");
+        sqrt("25");
+        sqrt("10");
+        sqrt("250");
+        sqrt("5253");
+        sqrt("100500");
     }
 
     // --- helpers ---
@@ -253,6 +242,13 @@ public class StringNumericDemo {
         System.out.printf("  %s ÷ %s = %s%n", a, b, result);
     }
 
+    private static void divVis(String a, String b) {
+        System.out.println(new StringNumeric(a) + " ÷ " + new StringNumeric(b) + " = "
+                + new StringNumeric(a).div(new StringNumeric(b)));
+        new StringNumeric(a).div(new StringNumeric(b), true);
+        System.out.println();
+    }
+
     private static void cmp(String a, String b) {
         StringNumeric na = new StringNumeric(a);
         StringNumeric nb = new StringNumeric(b);
@@ -260,4 +256,17 @@ public class StringNumericDemo {
         String rel = c < 0 ? "<" : c > 0 ? ">" : "=";
         System.out.printf("  %s %s %s  (equals: %b)%n", a, rel, b, na.equals(nb));
     }
+
+    private static void sqrt(String a) {
+        StringNumeric na = new StringNumeric(a);
+        System.out.printf("  Табличний √%s ≈ %s%n", a, na.sqrtApproximate());
+        System.out.printf("  Табличний з візуалізацією √%s ≈ %s%n", a, na.sqrtApproximate(true));
+        System.out.printf("  Інтерактивний √%s ≈ %s%n", a, na.sqrtIterative());
+        System.out.printf("  Інтерактивний з візуалізацією √%s ≈ %s%n", a, na.sqrtIterative(true));
+        System.out.printf("  Стовпчиком √%s ≈ %s%n", a, na.sqrtLongDivision());
+        System.out.printf("  Стовпчиком з візуалізацією √%s ≈ %s%n", a, na.sqrtLongDivision(true));
+
+        System.out.println();
+    }
+
 }
