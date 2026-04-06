@@ -207,8 +207,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             StringNumericRecord magRec = addMagnitudes(this, other, visualize);
             StringNumeric mag = magRec.value();
             StringNumeric result = (this.negative && !mag.isZero())
-                                   ? new StringNumeric(mag.digits, mag.scale, true)
-                                   : mag;
+                    ? new StringNumeric(mag.digits, mag.scale, true)
+                    : mag;
             return new StringNumericRecord(result, magRec.visualize());
         }
         int cmp = compareMagnitudes(this, other);
@@ -220,8 +220,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         StringNumericRecord magRec = subMagnitudes(larger, smaller, visualize);
         StringNumeric mag = magRec.value();
         StringNumeric result = (larger.negative && !mag.isZero())
-                               ? new StringNumeric(mag.digits, mag.scale, true)
-                               : mag;
+                ? new StringNumeric(mag.digits, mag.scale, true)
+                : mag;
         return new StringNumericRecord(result, magRec.visualize());
     }
 
@@ -293,8 +293,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         StringNumericRecord magRec = multiplyMagnitudes(this, other, visualize);
         StringNumeric mag = magRec.value();
         StringNumeric result = (resultNegative && !mag.isZero())
-                               ? new StringNumeric(mag.digits, mag.scale, true)
-                               : mag;
+                ? new StringNumeric(mag.digits, mag.scale, true)
+                : mag;
         return new StringNumericRecord(result, magRec.visualize());
     }
 
@@ -345,11 +345,11 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         StringNumeric mag = divideMagnitudes.value();
 
         return (resultNegative && !mag.isZero())
-               ? new StringNumericRecord(
+                ? new StringNumericRecord(
                         new StringNumeric(mag.digits, mag.scale, true),
                         divideMagnitudes.visualize()
                 )
-               : new StringNumericRecord(
+                : new StringNumericRecord(
                         mag,
                         divideMagnitudes.visualize()
                 );
@@ -402,8 +402,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
         // Для дробових чисел беремо цілу частину (таблиця квадратів — ціла)
         BigInteger target = scale == 0
-                            ? new BigInteger(digits)
-                            : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+                ? new BigInteger(digits)
+                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
         return generateBigSquareTable(target);
     }
 
@@ -456,8 +456,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         // Для дробових чисел беремо цілу частину як наближення —
         // достатньо для початкового наближення методу Герона
         BigInteger target = scale == 0
-                            ? new BigInteger(digits)
-                            : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+                ? new BigInteger(digits)
+                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
 
         BigInteger[][] table = generateBigSquareTable(target);
 
@@ -762,9 +762,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     private void buildClassicSqrtStep(StringBuilder sb, int step,
-                                      StringNumeric remainder, String p,
-                                      int x, StringNumeric subtrahend, String currentRoot,
-                                      int precision) {
+            StringNumeric remainder, String p,
+            int x, StringNumeric subtrahend, String currentRoot,
+            int precision) {
         // Рахуємо загальну довжину числа, що зараз у залишку (включаючи знесену пару)
         String remStr = remainder.toString();
         String subStr = subtrahend.toString();
@@ -1162,7 +1162,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * </pre>
      */
     private static String buildAddVisualization(String aRaw, String bRaw, String resultRaw,
-                                                int[] carryInto, int maxLen, int scale) {
+            int[] carryInto, int maxLen, int scale) {
         return buildVisualization(aRaw, bRaw, resultRaw, carryInto, maxLen, scale, '+', carry -> (char) ('0' + carry));
     }
 
@@ -1178,7 +1178,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * (фактично він зменшується на 1).
      */
     private static String buildSubVisualization(String aRaw, String bRaw, String resultRaw,
-                                                int[] incomingBorrow, int maxLen, int scale) {
+            int[] incomingBorrow, int maxLen, int scale) {
         return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-', borrow -> '1');
     }
 
@@ -1193,7 +1193,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * відображення
      */
     private static String buildVisualization(String aRaw, String bRaw, String resultRaw,
-                                             int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
+            int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
 
         // вставляємо десяткову крапку лише для відображення
         String a = insertDot(aRaw, scale);
@@ -1459,8 +1459,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      */
     public BigInteger toBigInteger() {
         BigInteger abs = scale == 0
-                         ? new BigInteger(digits)
-                         : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+                ? new BigInteger(digits)
+                : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
         return negative ? abs.negate() : abs;
     }
 

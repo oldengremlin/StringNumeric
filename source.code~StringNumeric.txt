@@ -1,0 +1,3031 @@
+/*
+ * File:  src/test/java/ua/org/olden/stringnumeric/StringNumericTest.java
+ */
+package ua.org.olden.stringnumeric;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import static org.junit.jupiter.api.Assertions.*;
+import ua.org.olden.stringnumeric.StringNumericRecord;
+class StringNumericTest {
+    // ── add (positive) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "0, 0, 0",
+        "1, 0, 1",
+        "0, 1, 1",
+        "29, 12, 41",
+        "9, 1, 10",
+        "99, 1, 100",
+        "999, 1, 1000",
+        "10, 20, 30",
+        "123456789, 987654321, 1111111110"
+    })
+    void testAdd(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).add(new StringNumeric(b)).toString());
+    }
+    @ParameterizedTest
+    @CsvSource({
+        "48.12, 15.67, 63.79", // basic decimal add
+        "1.5,   2.25,  3.75", // different scales
+        "0.1,   0.9,   1", // fractional carry produces integer
+        "9.99,  0.01,  10", // carry across decimal point
+        "0.5,   0.5,   1", // sum is whole number
+        "1.50,  2.50,  4", // trailing zeros normalise
+        "100.001, 0.999, 101", // deep fractional carry
+    })
+    void testAddDecimal(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).add(new StringNumeric(b)).toString());
+    }
+    @Test
+    void testAddBeyondLongRange() {
+        StringNumeric result = new StringNumeric("99999999999999999999")
+                .add(new StringNumeric("1"));
+        assertEquals("100000000000000000000", result.toString());
+    }
+    // ── add (negative) ────────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "-1,   -2,   -3", // both negative
+        "-5,    3,   -2", // |negative| > |positive|
+        " 3,   -5,   -2", // |positive| < |negative|
+        "-5,    5,    0", // cancel out
+        "-0.5,  0.5,  0", // decimal cancel
+        "-1.5,  1,   -0.5", // decimal mixed
+        " 1,   -1.5, -0.5",
+        "-10,   3,   -7",
+        " 7,  -10,   -3",})
+    void testAddWithNegatives(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).add(new StringNumeric(b.strip())).toString());
+    }
+    // ── add visualization ─────────────────────────────────────────────────────
+    @Test
+    void testAddVisualizationWithCarry() {
+        StringNumericRecord rec = new StringNumeric("29").add(new StringNumeric("12"), true);
+        assertEquals("41", rec.value().toString());
+        assertEquals(" 1\n 29\n+12\n ──\n 41", rec.visualize().stripTrailing());
+    }
+    @Test
+    void testAddVisualizationWithChainedCarry() {
+        StringNumericRecord rec = new StringNumeric("99").add(new StringNumeric("1"), true);
+        assertEquals("100", rec.value().toString());
+        assertEquals(" 11\n  99\n+  1\n ───\n 100", rec.visualize().stripTrailing());
+    }
+    @Test
+    void testAddVisualizationNoCarry() {
+        StringNumericRecord rec = new StringNumeric("10").add(new StringNumeric("20"), true);
+        assertEquals(" 10\n+20\n ──\n 30", rec.visualize().stripTrailing());
+    }
+    @Test
+    void testAddWithoutVisualizationProducesNoOutput() {
+        assertNull(new StringNumeric("29").add(new StringNumeric("12"), false).visualize());
+    }
+    // ── sub (positive) ────────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "0,   0,   0",
+        "1,   0,   1",
+        "1,   1,   0",
+        "41,  12,  29",
+        "10,  1,   9",
+        "100, 1,   99",
+        "1000,1,   999",
+        "30,  20,  10",
+        "1111111110, 987654321, 123456789"
+    })
+    void testSub(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).sub(new StringNumeric(b)).toString());
+    }
+    @ParameterizedTest
+    @CsvSource({
+        "63.79, 15.67, 48.12", // basic decimal sub
+        "3.75,  1.5,   2.25", // different scales
+        "1,     0.9,   0.1", // integer minus decimal
+        "10,    9.99,  0.01", // borrow across decimal point
+        "1,     0.5,   0.5", // result is half
+        "4,     1.50,  2.5", // trailing zeros normalise
+        "101,   0.999, 100.001", // deep fractional borrow
+    })
+    void testSubDecimal(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).sub(new StringNumeric(b)).toString());
+    }
+    @Test
+    void testSubBeyondLongRange() {
+        StringNumeric result = new StringNumeric("100000000000000000000")
+                .sub(new StringNumeric("1"));
+        assertEquals("99999999999999999999", result.toString());
+    }
+    // ── sub (negative results & negative operands) ────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        " 1,   2,   -1", // positive result flips sign
+        " 0,   5,   -5",
+        " 1.5, 3,   -1.5", // decimal
+        "-5,  -3,   -2", // both negative: -5 - (-3) = -5 + 3 = -2
+        "-3,  -5,    2", // -3 - (-5) = -3 + 5 = 2
+        "-1,   2,   -3", // negative minus positive
+        " 5,  -3,    8", // positive minus negative = sum
+        " 1.5,-1.5,  3",})
+    void testSubWithNegatives(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).sub(new StringNumeric(b.strip())).toString());
+    }
+    // ── sub visualization ─────────────────────────────────────────────────────
+    @Test
+    void testSubVisualizationWithBorrow() {
+        StringNumericRecord rec = new StringNumeric("52").sub(new StringNumeric("27"), true);
+        assertEquals("25", rec.value().toString());
+        assertEquals(" 1\n 52\n-27\n ──\n 25", rec.visualize().stripTrailing());
+    }
+    @Test
+    void testSubVisualizationWithChainedBorrow() {
+        StringNumericRecord rec = new StringNumeric("100").sub(new StringNumeric("1"), true);
+        assertEquals("99", rec.value().toString());
+        assertEquals(" 11\n 100\n-  1\n ───\n  99", rec.visualize().stripTrailing());
+    }
+    @Test
+    void testSubVisualizationNoBorrow() {
+        StringNumericRecord rec = new StringNumeric("30").sub(new StringNumeric("20"), true);
+        assertEquals(" 30\n-20\n ──\n 10", rec.visualize().stripTrailing());
+    }
+    @Test
+    void testSubWithoutVisualizationProducesNoOutput() {
+        assertNull(new StringNumeric("52").sub(new StringNumeric("27"), false).visualize());
+    }
+    @Test
+    void testSubProducesNegativeResult() {
+        assertEquals("-1", new StringNumeric("1").sub(new StringNumeric("2")).toString());
+        assertEquals("-0.5", new StringNumeric("0.5").sub(new StringNumeric("1")).toString());
+    }
+    // ── mul (positive) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "0, 0, 0",
+        "1, 0, 0",
+        "29, 12, 348",
+        "999, 1, 999",
+        "10, 20, 200",
+        "123456789, 987654321, 121932631112635269"
+    })
+    void testMul(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).mul(new StringNumeric(b)).toString());
+    }
+    @ParameterizedTest
+    @CsvSource({
+        "48.12, 15.67, 754.0404",
+        "1.5,   2.25,  3.375",
+        "0.1,   0.9,   0.09",
+        "9.99,  0.01,  0.0999",
+        "1.50,  2.50,  3.75"
+    })
+    void testMulDecimal(String a, String b, String expected) {
+        assertEquals(expected, new StringNumeric(a).mul(new StringNumeric(b)).toString());
+    }
+    @Test
+    void testMulBeyondLongRange() {
+        StringNumeric result = new StringNumeric("99999999999999999999")
+                .mul(new StringNumeric("12345678901234567890"));
+        assertEquals("1234567890123456788987654321098765432110", result.toString());
+    }
+    // ── mul (negative) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "-5,   3,   -15",
+        " 3,  -5,   -15",
+        "-5,  -3,    15",
+        "-1.5, 2.25, -3.375",
+        " 1.5,-2.25, -3.375"
+    })
+    void testMulWithNegatives(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).mul(new StringNumeric(b.strip())).toString());
+    }
+    // ── mul visualization ────────────────────────────────────────────────────
+    @Test
+    void testMulVisualization() {
+        StringNumericRecord rec = new StringNumeric("29").mul(new StringNumeric("12"), true);
+        assertEquals("348", rec.value().toString());
+        assertEquals("    29\n×   12\n──────\n    58\n   29 \n──────\n   348", rec.visualize().stripTrailing());
+    }
+    @Test
+    void testMulWithoutVisualizationProducesNoOutput() {
+        assertNull(new StringNumeric("29").mul(new StringNumeric("12"), false).visualize());
+    }
+    // ── div (positive) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "100, 4,   25",
+        "10,  2,   5",
+        "15,  3,   5",
+        "1,   1,   1",
+        "0,   5,   0"
+    })
+    void testDiv(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).div(new StringNumeric(b.strip())).toString());
+    }
+    @ParameterizedTest
+    @CsvSource({
+        "3.75, 1.5,   2.5",
+        "10,   4,     2.5",
+        "41,   12,    3.4166666666",
+        "1,    0.9,   1.1111111111",
+        "0.1,  0.3,   0.3333333333",
+        "48.12,15.67, 3.0708359923"
+    })
+    void testDivDecimal(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).div(new StringNumeric(b.strip())).toString());
+    }
+    @Test
+    void testDivBeyondLongRange() {
+        StringNumeric result = new StringNumeric("99999999999999999999")
+                .div(new StringNumeric("123456789"));
+        assertEquals("810000007371.000067068", result.toString());
+    }
+    @Test
+    void testDivByZeroThrows() {
+        assertThrows(ArithmeticException.class,
+                () -> new StringNumeric("5").div(new StringNumeric("0")));
+    }
+    // ── div (negative) ───────────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "-15,   3,   -5",
+        " 15,  -3,   -5",
+        "-15,  -3,    5",
+        "-3.75, 1.5, -2.5",
+        " 3.75,-1.5, -2.5"
+    })
+    void testDivWithNegatives(String a, String b, String expected) {
+        assertEquals(expected.strip(),
+                new StringNumeric(a.strip()).div(new StringNumeric(b.strip())).toString());
+    }
+    // ── div visualization ────────────────────────────────────────────────────
+    @Test
+    void testDivVisualization() {
+        StringNumericRecord rec = new StringNumeric("100").div(new StringNumeric("4"), 10, true);
+        assertEquals("25", rec.value().toString());
+        String vis = rec.visualize();
+        assertTrue(vis.contains("100"), "should contain dividend");
+        assertTrue(vis.contains("4"), "should contain divisor");
+        assertTrue(vis.contains("25"), "should contain quotient");
+        assertTrue(vis.contains("-8"), "should show first subtraction");
+        assertTrue(vis.contains("-20"), "should show second subtraction");
+    }
+    @Test
+    void testDivWithoutVisualizationProducesNoOutput() {
+        assertNull(new StringNumeric("100").div(new StringNumeric("4"), 10, false).visualize());
+    }
+    @Test
+    void testDivDividendSmallerThanDivisor() {
+        // 4 / 8 = 0.5 — перший крок: 4 < 8, вікно розширюється до 40
+        // Раніше падало з IllegalArgumentException ("repeat count is negative")
+        // у buildDivVisualization через від'ємний " ".repeat(d1.length()-window.length())
+        assertEquals("0.5", new StringNumeric("4").div(new StringNumeric("8")).toString());
+        assertEquals("0.5", new StringNumeric("1").div(new StringNumeric("2")).toString());
+        assertEquals("0.25", new StringNumeric("1").div(new StringNumeric("4")).toString());
+    }
+    @Test
+    void testDivVisualizationDividendSmallerThanDivisor() {
+        // Перевірка що візуалізація не падає і містить правильний результат
+        StringNumericRecord rec = new StringNumeric("4").div(new StringNumeric("8"), 10, true);
+        assertNotNull(rec.visualize(), "visualize=true should produce output");
+        assertTrue(rec.visualize().contains("0.5"), "should contain quotient 0.5");
+    }
+    // ── constructors ──────────────────────────────────────────────────────────
+    @Test
+    void testConstructorStripsLeadingZeros() {
+        assertEquals("42", new StringNumeric("0042").toString());
+        assertEquals("0", new StringNumeric("0").toString());
+        assertEquals("0", new StringNumeric("000").toString());
+    }
+    @Test
+    void testConstructorDecimal() {
+        assertEquals("48.12", new StringNumeric("48.12").toString());
+        assertEquals("0.5", new StringNumeric("0.5").toString());
+        assertEquals("1.5", new StringNumeric("1.50").toString());   // trailing zero stripped
+        assertEquals("5", new StringNumeric("5.00").toString());   // all fractional zeros → integer
+    }
+    @Test
+    void testConstructorNumericTypes() {
+        assertEquals("42", new StringNumeric(42).toString());
+        assertEquals("42", new StringNumeric(42L).toString());
+        assertEquals("3.14", new StringNumeric(3.14159, 2).toString());   // rounded to 2 places
+        assertEquals("3.14", new StringNumeric(3.14159f, 2).toString());
+        assertEquals("1", new StringNumeric(0.999, 0).toString());     // rounds to 1
+        assertEquals("3", new StringNumeric(3.0, 2).toString());       // trailing zeros stripped
+    }
+    @Test
+    void testConstructorNegativeString() {
+        assertEquals("-42", new StringNumeric("-42").toString());
+        assertEquals("-3.14", new StringNumeric("-3.14").toString());
+        assertEquals("-0.5", new StringNumeric("-0.5").toString());
+        assertEquals("0", new StringNumeric("-0").toString());   // -0 normalises to 0
+        assertEquals("0", new StringNumeric("-0.00").toString());
+    }
+    @Test
+    void testConstructorNegativeNumericTypes() {
+        assertEquals("-42", new StringNumeric(-42).toString());
+        assertEquals("-42", new StringNumeric(-42L).toString());
+        assertEquals("-3.14", new StringNumeric(-3.14159, 2).toString());
+        assertEquals("-3.14", new StringNumeric(-3.14159f, 2).toString());
+        assertEquals("0", new StringNumeric(-0L).toString());    // -0 normalises to 0
+    }
+    @Test
+    void testConstructorRejectsInvalidInput() {
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric(""));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("12a3"));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("12.a3"));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric("5."));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric((String) null));
+        assertThrows(IllegalArgumentException.class, () -> new StringNumeric(1.5, -1));
+    }
+    // ── negate ────────────────────────────────────────────────────────────────
+    @Test
+    void testNegate() {
+        assertEquals("-5", new StringNumeric("5").negate().toString());
+        assertEquals("5", new StringNumeric("-5").negate().toString());
+        assertEquals("0", new StringNumeric("0").negate().toString());   // negate(0) == 0
+        assertEquals("-0.5", new StringNumeric("0.5").negate().toString());
+        assertEquals("0.5", new StringNumeric("-0.5").negate().toString());
+    }
+    // ── compareTo ─────────────────────────────────────────────────────────────
+    @Test
+    void testCompareTo() {
+        StringNumeric one = new StringNumeric("1");
+        StringNumeric ten = new StringNumeric("10");
+        StringNumeric twenty = new StringNumeric("20");
+        StringNumeric tenB = new StringNumeric("10");
+        assertTrue(one.compareTo(ten) < 0);
+        assertTrue(ten.compareTo(twenty) < 0);
+        assertTrue(twenty.compareTo(ten) > 0);
+        assertEquals(0, ten.compareTo(tenB));
+    }
+    @Test
+    void testCompareToWithNegatives() {
+        StringNumeric negFive = new StringNumeric("-5");
+        StringNumeric negThree = new StringNumeric("-3");
+        StringNumeric three = new StringNumeric("3");
+        assertTrue(negFive.compareTo(three) < 0);    // -5 < 3
+        assertTrue(negFive.compareTo(negThree) < 0); // -5 < -3
+        assertTrue(negThree.compareTo(negFive) > 0); // -3 > -5
+        assertEquals(0, negFive.compareTo(new StringNumeric("-5")));
+        assertTrue(negThree.compareTo(three) < 0);   // -3 < 3
+    }
+    // ── equals ────────────────────────────────────────────────────────────────
+    @Test
+    void testEquals() {
+        assertEquals(new StringNumeric("42"), new StringNumeric("42"));
+        assertEquals(new StringNumeric("42"), new StringNumeric("042"));
+        assertNotEquals(new StringNumeric("42"), new StringNumeric("43"));
+    }
+    @Test
+    void testEqualsWithNegatives() {
+        assertEquals(new StringNumeric("-42"), new StringNumeric("-42"));
+        assertNotEquals(new StringNumeric("-42"), new StringNumeric("42"));
+        // both representations of zero are equal
+        assertEquals(new StringNumeric("0"), new StringNumeric("-0"));
+    }
+    // ── Number interface ──────────────────────────────────────────────────────
+    @Test
+    void testNumberInterface() {
+        StringNumeric n = new StringNumeric("42");
+        assertEquals(42, n.intValue());
+        assertEquals(42L, n.longValue());
+        assertEquals(42.0f, n.floatValue());
+        assertEquals(42.0, n.doubleValue());
+    }
+    @Test
+    void testNumberInterfaceNegative() {
+        StringNumeric n = new StringNumeric("-42");
+        assertEquals(-42, n.intValue());
+        assertEquals(-42L, n.longValue());
+        assertEquals(-42.0f, n.floatValue());
+        assertEquals(-42.0, n.doubleValue());
+    }
+    // ── toBigInteger ──────────────────────────────────────────────────────────
+    @Test
+    void testToBigInteger() {
+        assertEquals("5", new StringNumeric("5").toBigInteger().toString());
+        assertEquals("3", new StringNumeric("3.7").toBigInteger().toString());  // truncates
+        assertEquals("2", new StringNumeric("2.25").toBigInteger().toString()); // truncates
+        assertEquals("0", new StringNumeric("0.99").toBigInteger().toString()); // < 1 → 0
+        assertEquals("-5", new StringNumeric("-5.9").toBigInteger().toString()); // negative
+    }
+    // ── sqrtApproximate ───────────────────────────────────────────────────────
+    @Test
+    void testSqrtApproximateIntegers() {
+        // Для perfect-square результат точний
+        assertEquals("1", new StringNumeric("1").sqrtApproximate().toString());
+        assertEquals("3", new StringNumeric("9").sqrtApproximate().toString());
+        assertEquals("10", new StringNumeric("100").sqrtApproximate().toString());
+    }
+    @Test
+    void testSqrtApproximateDecimalDoesNotThrow() {
+        // Раніше падало з NumberFormatException
+        assertDoesNotThrow(() -> new StringNumeric("2.25").sqrtApproximate());
+        assertDoesNotThrow(() -> new StringNumeric("0.25").sqrtApproximate());
+        assertDoesNotThrow(() -> new StringNumeric("0.0001").sqrtApproximate());
+    }
+    @Test
+    void testSqrtApproximateNegativeThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new StringNumeric("-4").sqrtApproximate());
+    }
+    // ── sqrtIterative (Герон) ─────────────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "4,   0,  2",
+        "9,   0,  3",
+        "100, 0,  10",
+        "1,   0,  1",
+        "0,   0,  0",})
+    void testSqrtIterativeInteger(String a, int precision, String expected) {
+        assertEquals(expected,
+                new StringNumeric(a).sqrtIterative(precision).toString());
+    }
+    @ParameterizedTest
+    @CsvSource({
+        "2.25, 4, 1.5",
+        "0.25, 4, 0.5",
+        "6.25, 4, 2.5",
+        "0.01, 4, 0.1",})
+    void testSqrtIterativeDecimal(String a, int precision, String expected) {
+        assertEquals(expected,
+                new StringNumeric(a).sqrtIterative(precision).toString());
+    }
+    @Test
+    void testSqrtIterativeNegativeThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new StringNumeric("-4").sqrtIterative());
+    }
+    // ── sqrtLongDivision (в стовпчик) ─────────────────────────────────────────
+    @ParameterizedTest
+    @CsvSource({
+        "4,   0,  2",
+        "9,   0,  3",
+        "100, 0,  10",
+        "25,  0,  5",
+        "1,   0,  1",
+        "0,   0,  0",})
+    void testSqrtLongDivisionInteger(String a, int precision, String expected) {
+        assertEquals(expected,
+                new StringNumeric(a).sqrtLongDivision(precision).toString());
+    }
+    @ParameterizedTest
+    @CsvSource({
+        "2.25,   0,  1.5",
+        "0.25,   0,  0.5",
+        "6.25,   0,  2.5",
+        "0.0025, 0,  0.05",
+        "56.25,  0,  7.5",})
+    void testSqrtLongDivisionDecimal(String a, int precision, String expected) {
+        assertEquals(expected,
+                new StringNumeric(a).sqrtLongDivision(precision).toString());
+    }
+    @Test
+    void testSqrtLongDivisionWithPrecision() {
+        // sqrt(2) ≈ 1.41421356...
+        String result = new StringNumeric("2").sqrtLongDivision(4).toString();
+        assertTrue(result.startsWith("1.4142"), "sqrt(2) should start with 1.4142, got: " + result);
+    }
+    @Test
+    void testSqrtLongDivisionDecimalWithPrecision() {
+        // sqrt(2.25) = 1.5 точно, precision=4 дає 1.5000
+        String result = new StringNumeric("2.25").sqrtLongDivision(4).toString();
+        assertEquals("1.5", result); // trailing zeros normalised
+    }
+    @Test
+    void testSqrtLongDivisionNegativeThrows() {
+        assertThrows(IllegalArgumentException.class,
+                () -> new StringNumeric("-9").sqrtLongDivision());
+    }
+    @Test
+    void testSqrtLongDivisionVisualizationProducesOutput() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("144").SqrtLongDivision(0, true);
+        System.setOut(original);
+        assertFalse(buf.toString().isEmpty(), "visualize=true should produce output");
+    }
+    @Test
+    void testSqrtLongDivisionWithoutVisualizationProducesNoOutput() {
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("144").SqrtLongDivision(0, false);
+        new StringNumeric("144").sqrtLongDivision(0);
+        System.setOut(original);
+        assertTrue(buf.toString().isEmpty());
+    }
+}
+/*
+ * File:  src/main/java/ua/org/olden/stringnumeric/StringNumeric.java
+ */
+package ua.org.olden.stringnumeric;
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.RoundingMode;
+import java.util.Arrays;
+import java.util.function.IntFunction;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+/**
+ * Число довільної точності зі знаком, що зберігає значення у вигляді рядка
+ * цифр.
+ *
+ * <p>
+ * Внутрішнє представлення:
+ * <ul>
+ * <li>{@code digits} — рядок значущих цифр без десяткової крапки</li>
+ * <li>{@code scale} — кількість знаків після коми (0 = ціле число)</li>
+ * <li>{@code negative} — ознака від'ємного числа (для нуля завжди
+ * {@code false})</li>
+ * </ul>
+ * Наприклад, {@code -48.12} зберігається як
+ * {@code digits="4812", scale=2, negative=true}.
+ *
+ * <p>
+ * Усі чотири арифметичні операції реалізовано у вигляді шкільних алгоритмів «в
+ * стовпчик». За бажанням кожну операцію можна вивести у вигляді шкільного
+ * запису (параметр {@code visualize}).
+ */
+public final class StringNumeric extends Number implements Comparable<StringNumeric> {
+    private static final Pattern VALUE_PATTERN = Pattern.compile("(\\d+)(?:\\.(\\d+))?");
+    private final String digits;   // значущі цифри без десяткової крапки
+    private final int scale;       // кількість знаків після коми (0 = ціле число)
+    private final boolean negative; // true якщо число від'ємне (для нуля завжди false)
+    // Граничне значення для BigInteger, яке відповідає Integer.MAX_VALUE рядків
+    // Оскільки 1 рядок = 10 чисел, то ліміт = Integer.MAX_VALUE * 10 + 9
+    private final BigInteger MAX_SUPPORTED_NUMBER = BigInteger.valueOf(Integer.MAX_VALUE)
+            .multiply(BigInteger.TEN)
+            .add(BigInteger.valueOf(9));
+    /**
+     * Результат однієї колонкової операції: цифра результату та перенос/позика
+     * на наступний розряд.
+     */
+    private record ColumnResult(int digit, int nextTransfer) {
+    }
+    /**
+     * Результат нормалізації рядка цифр: цифри без зайвих нулів та відповідний
+     * scale.
+     */
+    private record returnStripZeros(String digit, int scale) {
+    }
+    /**
+     * Функціональний інтерфейс для однієї колонкової операції (додавання або
+     * віднімання). Приймає дві цифри та вхідний перенос/позику, повертає цифру
+     * результату і вихідний перенос/позику.
+     */
+    @FunctionalInterface
+    private interface ColumnOperation {
+        ColumnResult apply(int digitA, int digitB, int incoming);
+    }
+    /**
+     * Створює число з рядкового представлення. Допустимий формат:
+     * необов'язковий знак {@code -}, цілі цифри, необов'язкова десяткова
+     * частина через {@code .}. Провідні та хвостові нулі нормалізуються:
+     * {@code "-007.50"} → {@code "-7.5"}.
+     *
+     * @param value
+     * @throws IllegalArgumentException якщо рядок {@code null}, порожній або
+     * має недопустимий формат
+     */
+    public StringNumeric(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("Value must not be null or blank");
+        }
+        value = value.strip();
+        if (value.isBlank()) {
+            throw new IllegalArgumentException("Value must not be null or blank");
+        }
+        boolean neg = value.startsWith("-");
+        String abs = neg ? value.substring(1) : value;
+        Matcher m = VALUE_PATTERN.matcher(abs);
+        if (!m.matches()) {
+            throw new IllegalArgumentException(
+                    "Value must consist of digits with optional dot: " + value);
+        }
+        String intPart = m.group(1);
+        String fracPart = m.group(2) != null ? m.group(2) : "";
+        returnStripZeros stripZeros = stripZeros(intPart + fracPart, fracPart.length());
+        if (stripZeros.digit.isEmpty() || stripZeros.digit.equalsIgnoreCase("0")) {
+            this.digits = "0";
+            this.scale = 0;
+        } else {
+            this.digits = stripZeros.digit;
+            this.scale = stripZeros.scale;
+        }
+        this.negative = neg && !stripZeros.digit.equals("0"); // -0 normalises to 0
+    }
+    /**
+     * Створює ціле число з {@code int}.
+     *
+     * @param value
+     */
+    public StringNumeric(int value) {
+        this((long) value);
+    }
+    /**
+     * Створює ціле число з {@code long}.
+     *
+     * @param value
+     */
+    public StringNumeric(long value) {
+        this.negative = value < 0;
+        this.digits = Long.toString(Math.abs(value));
+        this.scale = 0;
+    }
+    /**
+     * Створює число з {@code double}, округлене до {@code scale} знаків після
+     * коми. Явний {@code scale} обов'язковий, щоб уникнути сюрпризів двійкової
+     * арифметики (наприклад, {@code 0.1 + 0.2 == 0.30000000000000004}).
+     *
+     * @param value
+     * @param scale
+     * @throws IllegalArgumentException якщо {@code scale} від'ємний
+     */
+    public StringNumeric(double value, int scale) {
+        this(formatFloating(value, scale));
+    }
+    /**
+     * Створює число з {@code float}, округлене до {@code scale} знаків після
+     * коми.
+     *
+     * @param value
+     * @param scale
+     * @see #StringNumeric(double, int)
+     */
+    public StringNumeric(float value, int scale) {
+        this(formatFloating(value, scale));
+    }
+    private static String formatFloating(double value, int scale) {
+        if (scale < 0) {
+            throw new IllegalArgumentException("Scale must be non-negative");
+        }
+        String plain = BigDecimal.valueOf(Math.abs(value))
+                .setScale(scale, RoundingMode.HALF_UP)
+                .toPlainString();
+        return value < 0 ? "-" + plain : plain;
+    }
+    // Приватний конструктор — digits/scale/negative вже нормалізовані.
+    private StringNumeric(String digits, int scale, boolean negative) {
+        this.digits = digits;
+        this.scale = scale;
+        this.negative = negative;
+    }
+    // --- знак ---
+    /**
+     * Повертає нове значення з протилежним знаком; {@code negate(0) == 0}.
+     *
+     * @return
+     */
+    public StringNumeric negate() {
+        if (isZero()) {
+            return this;
+        }
+        return new StringNumeric(digits, scale, !negative);
+    }
+    /**
+     * Повертає {@code true}, якщо значення дорівнює нулю.
+     *
+     * @return
+     */
+    public boolean isZero() {
+        return digits.equals("0"); // після нормалізації нуль завжди має scale == 0
+    }
+    // --- додавання ---
+    protected StringNumeric Add(StringNumeric other, boolean visualize) {
+        StringNumericRecord rec = add(other, visualize);
+        if (visualize && rec.visualize() != null) {
+            System.out.println(rec.visualize());
+        }
+        return rec.value();
+    }
+    public StringNumericRecord add(StringNumeric other, boolean visualize) {
+        if (this.negative == other.negative) {
+            StringNumericRecord magRec = addMagnitudes(this, other, visualize);
+            StringNumeric mag = magRec.value();
+            StringNumeric result = (this.negative && !mag.isZero())
+                                   ? new StringNumeric(mag.digits, mag.scale, true)
+                                   : mag;
+            return new StringNumericRecord(result, magRec.visualize());
+        }
+        int cmp = compareMagnitudes(this, other);
+        if (cmp == 0) {
+            return new StringNumericRecord(new StringNumeric("0", 0, false), null);
+        }
+        StringNumeric larger = cmp > 0 ? this : other;
+        StringNumeric smaller = cmp > 0 ? other : this;
+        StringNumericRecord magRec = subMagnitudes(larger, smaller, visualize);
+        StringNumeric mag = magRec.value();
+        StringNumeric result = (larger.negative && !mag.isZero())
+                               ? new StringNumeric(mag.digits, mag.scale, true)
+                               : mag;
+        return new StringNumericRecord(result, magRec.visualize());
+    }
+    /**
+     * Додає {@code other} до цього значення.
+     *
+     * @param other
+     * @return
+     */
+    public StringNumeric add(StringNumeric other) {
+        return Add(other, false);
+    }
+    // --- віднімання ---
+    protected StringNumeric Sub(StringNumeric other, boolean visualize) {
+        StringNumericRecord rec = sub(other, visualize);
+        if (visualize && rec.visualize() != null) {
+            System.out.println(rec.visualize());
+        }
+        return rec.value();
+    }
+    /**
+     * Делегує до {@code add(other.negate(), visualize)}, тому візуалізація
+     * показує фактичну операцію над модулями (додавання або віднімання).
+     *
+     * @param other
+     * @param visualize
+     * @return
+     */
+    public StringNumericRecord sub(StringNumeric other, boolean visualize) {
+        return add(other.negate(), visualize);
+    }
+    /**
+     * Віднімає {@code other} від цього значення.
+     *
+     * @param other
+     * @return
+     */
+    public StringNumeric sub(StringNumeric other) {
+        return Sub(other, false);
+    }
+    // --- множення ---
+    protected StringNumeric Mul(StringNumeric other, boolean visualize) {
+        StringNumericRecord rec = mul(other, visualize);
+        if (visualize && rec.visualize() != null) {
+            System.out.println(rec.visualize());
+        }
+        return rec.value();
+    }
+    /**
+     * Множить це значення на {@code other}. Якщо {@code visualize == true} —
+     * рядок шкільного запису доступний через
+     * {@link StringNumericRecord#visualize()}.
+     *
+     * @param other
+     * @param visualize
+     * @return
+     */
+    public StringNumericRecord mul(StringNumeric other, boolean visualize) {
+        if (this.isZero() || other.isZero()) {
+            return new StringNumericRecord(new StringNumeric("0", 0, false), null);
+        }
+        boolean resultNegative = this.negative != other.negative;
+        StringNumericRecord magRec = multiplyMagnitudes(this, other, visualize);
+        StringNumeric mag = magRec.value();
+        StringNumeric result = (resultNegative && !mag.isZero())
+                               ? new StringNumeric(mag.digits, mag.scale, true)
+                               : mag;
+        return new StringNumericRecord(result, magRec.visualize());
+    }
+    /**
+     * Множить це значення на {@code other}.
+     *
+     * @param other
+     * @return
+     */
+    public StringNumeric mul(StringNumeric other) {
+        return Mul(other, false);
+    }
+    // --- ділення ---
+    /**
+     * Ділить це значення на {@code other} з точністю {@code precision} знаків
+     * після коми. Якщо {@code visualize == true} — виводить шкільний запис
+     * ділення стовпчиком до {@code System.out}.
+     *
+     * @param other
+     * @param precision
+     * @param visualize
+     * @return
+     * @throws ArithmeticException якщо {@code other} дорівнює нулю
+     */
+    protected StringNumeric Div(StringNumeric other, int precision, boolean visualize) {
+        StringNumericRecord recordDiv = div(other, precision, visualize);
+        if (visualize) {
+            System.out.println(recordDiv.visualize());
+        }
+        return recordDiv.value();
+    }
+    public StringNumericRecord div(StringNumeric other, int precision, boolean visualize) {
+        if (other.isZero()) {
+            throw new ArithmeticException("Division by zero");
+        }
+        if (this.isZero()) {
+            return new StringNumericRecord(
+                    new StringNumeric("0", 0, false),
+                    null
+            );
+        }
+        boolean resultNegative = this.negative != other.negative;
+        StringNumericRecord divideMagnitudes = divideMagnitudes(this, other, precision, visualize);
+        StringNumeric mag = divideMagnitudes.value();
+        return (resultNegative && !mag.isZero())
+               ? new StringNumericRecord(
+                        new StringNumeric(mag.digits, mag.scale, true),
+                        divideMagnitudes.visualize()
+                )
+               : new StringNumericRecord(
+                        mag,
+                        divideMagnitudes.visualize()
+                );
+    }
+    /**
+     * Ділить на {@code other} з точністю 10 знаків після коми.
+     *
+     * @param other
+     * @return
+     */
+    public StringNumeric div(StringNumeric other) {
+        return Div(other, 10, false);
+    }
+    /**
+     * Ділить на {@code other} з вказаною точністю {@code precision} знаків
+     * після коми.
+     *
+     * @param other
+     * @param precision
+     * @return
+     */
+    public StringNumeric div(StringNumeric other, int precision) {
+        return Div(other, precision, false);
+    }
+    /**
+     * Ділить на {@code other} з точністю 10 знаків після коми та виводить
+     * візуалізацію.
+     *
+     * @param other
+     * @param visualize
+     * @return
+     */
+    public StringNumeric div(StringNumeric other, boolean visualize) {
+        return Div(other, 10, visualize);
+    }
+    // -- квадрати --
+    /**
+     * Генерує таблицю квадратів з перевіркою лімітів Java.
+     *
+     * @return
+     */
+    //buildSqrtVisualization()
+    public BigInteger[][] generateBigSquareTable() {
+        if (negative) {
+            throw new IllegalArgumentException("Неможливо побудувати таблицю для від'ємного числа");
+        }
+        // Для дробових чисел беремо цілу частину (таблиця квадратів — ціла)
+        BigInteger target = scale == 0
+                            ? new BigInteger(digits)
+                            : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+        return generateBigSquareTable(target);
+    }
+    private BigInteger[][] generateBigSquareTable(BigInteger maxNumber) {
+        // Перевірка обмеження алгоритму
+        if (maxNumber.compareTo(MAX_SUPPORTED_NUMBER) > 0) {
+            throw new UnsupportedOperationException(
+                    "Number too large! Maximum supported number for table: " + MAX_SUPPORTED_NUMBER
+            );
+        }
+        int rowsCount = maxNumber.divide(BigInteger.TEN).intValue() + 1;
+        BigInteger[][] table = new BigInteger[rowsCount][10];
+        for (int tens = 0; tens < rowsCount; tens++) {
+            for (int units = 0; units < 10; units++) {
+                BigInteger currentNumber = BigInteger.valueOf(tens)
+                        .multiply(BigInteger.TEN)
+                        .add(BigInteger.valueOf(units));
+                table[tens][units] = currentNumber.multiply(currentNumber);
+            }
+        }
+        return table;
+    }
+    /**
+     * Шукає наближений корінь.
+     *
+     * @return
+     */
+    public StringNumeric sqrtApproximate() {
+        return SqrtApproximate(false);
+    }
+    protected StringNumeric SqrtApproximate(boolean visualize) {
+        StringNumericRecord snr = sqrtApproximate(visualize);
+        if (visualize) {
+            System.out.println(snr.visualize());
+        }
+        return snr.value();
+    }
+    public StringNumericRecord sqrtApproximate(boolean visualize) {
+        if (this.negative) {
+            throw new IllegalArgumentException("Неможливо знайти корінь з від'ємного числа");
+        }
+        // Для дробових чисел беремо цілу частину як наближення —
+        // достатньо для початкового наближення методу Герона
+        BigInteger target = scale == 0
+                            ? new BigInteger(digits)
+                            : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+        BigInteger[][] table = generateBigSquareTable(target);
+        int bestR = 0;
+        int bestC = 0;
+        BigInteger minDifference = null;
+        for (int r = 0; r < table.length; r++) {
+            boolean rowExceeded = false;
+            for (int c = 0; c < table[r].length; c++) {
+                BigInteger currentSquare = table[r][c];
+                BigInteger diff = currentSquare.subtract(target).abs();
+                if (minDifference == null || diff.compareTo(minDifference) < 0) {
+                    minDifference = diff;
+                    bestR = r;
+                    bestC = c;
+                }
+                if (currentSquare.compareTo(target) > 0 && diff.compareTo(minDifference) > 0) {
+                    rowExceeded = true;
+                    break;
+                }
+            }
+            if (rowExceeded) {
+                break;
+            }
+        }
+        StringNumeric stringNumeric = new StringNumeric(String.valueOf(bestR) + bestC);
+        if (visualize) {
+            String buildSqrtVisualization = buildSqrtVisualization(target, table, bestR, bestC);
+            return new StringNumericRecord(
+                    stringNumeric,
+                    buildSqrtVisualization
+            );
+        }
+        return new StringNumericRecord(
+                stringNumeric,
+                null
+        );
+    }
+    /**
+     * Обчислює корінь методом ітерацій (Герона). Дозволяє отримати набагато
+     * більшу точність, ніж табличний метод.
+     *
+     * @return
+     */
+    public StringNumeric sqrtIterative() {
+        return SqrtIterative(10, false);
+    }
+    /**
+     * Обчислює корінь методом ітерацій (Герона). Дозволяє отримати набагато
+     * більшу точність, ніж табличний метод.
+     *
+     * @param visualize
+     * @return
+     */
+    public StringNumeric sqrtIterative(boolean visualize) {
+        return SqrtIterative(10, visualize);
+    }
+    public StringNumeric sqrtHeron(boolean visualize) {
+        return SqrtIterative(10, visualize);
+    }
+    /**
+     * Обчислює корінь методом ітерацій (Герона). Дозволяє отримати набагато
+     * більшу точність, ніж табличний метод.
+     *
+     * @param precision
+     * @return
+     */
+    public StringNumeric sqrtIterative(int precision) {
+        return SqrtIterative(precision, false);
+    }
+    public StringNumeric sqrtHeron(int precision) {
+        return SqrtIterative(precision, false);
+    }
+    /**
+     * Обчислює корінь методом ітерацій (Герона). Дозволяє отримати набагато
+     * більшу точність, ніж табличний метод.
+     *
+     * @param precision
+     * @param visualize
+     * @return
+     */
+    protected StringNumeric SqrtIterative(int precision, boolean visualize) {
+        StringNumericRecord recordSqrtIterative = sqrtIterative(precision, visualize);
+        if (visualize) {
+            System.out.println(recordSqrtIterative.visualize());
+        }
+        return recordSqrtIterative.value();
+    }
+    public StringNumericRecord sqrtIterative(int precision, boolean visualize) {
+        if (this.negative) {
+            throw new IllegalArgumentException("Корінь з від'ємного числа не підтримується");
+        }
+        StringBuilder resultVisualize = new StringBuilder();
+        if (this.isZero()) {
+            return new StringNumericRecord(
+                    new StringNumeric("0"),
+                    null
+            );
+        }
+        // 1. Початкове наближення (x0).
+        // Можна взяти результат табличного методу як чудовий старт!
+        StringNumeric x = this.SqrtApproximate(false);
+        // Для чисел між 0 і 1 (наприклад 0.25) sqrtApproximate повертає 0
+        // (ціла частина = 0) — це призведе до ділення на нуль у Героні.
+        // Використовуємо 1 як безпечне початкове наближення; Герон сходиться
+        // з будь-якого додатного старту.
+        if (x.isZero()) {
+            x = new StringNumeric("1");
+        }
+        StringNumeric two = new StringNumeric("2");
+        if (visualize) {
+            resultVisualize.append("Початкове наближення: " + x + "\n");
+        }
+        // 2. Ітераційний процес (зазвичай 6-10 ітерацій достатньо для високої точності)
+        for (int i = 0; i < 7; i++) {
+            // Формула: x = (x + target/x) / 2
+            StringNumeric step1 = this.div(x, precision); // target / x
+            StringNumeric step2 = x.add(step1);           // x + (target / x)
+            x = step2.div(two, precision);                // сума / 2
+            if (visualize) {
+                resultVisualize.append("Ітерація " + (i + 1) + ": " + x + "\n");
+            }
+        }
+        return new StringNumericRecord(
+                x,
+                resultVisualize.toString()
+        );
+    }
+    public StringNumeric sqrtHeron(int precision, boolean visualize) {
+        return SqrtIterative(precision, visualize);
+    }
+    /**
+     * Обчислює корінь "стовпчиком" (digit-by-digit calculation).
+     *
+     * @return
+     */
+    public StringNumeric sqrtLongDivision() {
+        return SqrtLongDivision(10, false);
+    }
+    /**
+     * Обчислює корінь "стовпчиком" (digit-by-digit calculation).
+     *
+     * @param precision
+     * @return
+     */
+    public StringNumeric sqrtLongDivision(int precision) {
+        return SqrtLongDivision(precision, false);
+    }
+    /**
+     * Обчислює корінь "стовпчиком" (digit-by-digit calculation).
+     *
+     * @param visualize
+     * @return
+     */
+    public StringNumeric sqrtLongDivision(boolean visualize) {
+        return SqrtLongDivision(10, visualize);
+    }
+    /**
+     * Обчислює корінь "стовпчиком" (digit-by-digit calculation). Цей метод
+     * знаходить корінь по одній цифрі за ітерацію.
+     *
+     * @param precision
+     * @param visualize
+     * @return
+     */
+    protected StringNumeric SqrtLongDivision(int precision, boolean visualize) {
+        StringNumericRecord recordSqrtLongDivision = sqrtLongDivision(precision, visualize);
+        if (visualize) {
+            System.out.println(recordSqrtLongDivision.visualize());
+        }
+        return recordSqrtLongDivision.value();
+    }
+    public StringNumericRecord sqrtLongDivision(int precision, boolean visualize) {
+        if (this.negative) {
+            throw new IllegalArgumentException("Корінь з від'ємного числа неможливий");
+        }
+        // Групуємо цифри по 2 зліва направо, включаючи дробову частину.
+        // Щоб алгоритм «пар» працював коректно, кількість знаків після коми
+        // має бути парною: якщо непарна — дописуємо один нуль праворуч.
+        String numericStr = this.digits;
+        int adjustedScale = this.scale;
+        if (adjustedScale % 2 != 0) {
+            numericStr = numericStr + "0"; // домножаємо на 10 — коренем ділимо назад
+            adjustedScale++;
+        }
+        // halfScale — кількість десяткових знаків у результаті, що припадають
+        // на «дробові пари» вихідного числа
+        int halfScale = adjustedScale / 2;
+        if (numericStr.length() % 2 != 0) {
+            numericStr = "0" + numericStr;
+        }
+        int numericStrPairs = numericStr.length() / 2;
+        // integerPairs — скільки пар дають цілу частину кореня (може бути 0)
+        int integerPairs = numericStrPairs - halfScale;
+        // де вставити крапку в resRoot (0 = перед першою цифрою → «0.xxx»)
+        int decimalPointAt = Math.max(integerPairs, 0);
+        StringBuilder resRoot = new StringBuilder();
+        StringNumeric remainder = new StringNumeric("0");
+        StringBuilder visualLog = new StringBuilder();
+        // Якщо число суто дробове (0.25, 0.0025 тощо), результат починається з «0.»
+        // і може мати додаткові нулі після крапки.
+        // Крапка потрібна якщо: є дробові цифри з вхідного числа (halfScale > 0)
+        // або якщо калькуляції запитано decimal precision > 0.
+        if (integerPairs <= 0) {
+            resRoot.append("0");
+            if (halfScale > 0 || precision > 0) {
+                resRoot.append(".");
+                for (int k = 0; k < -integerPairs; k++) {
+                    resRoot.append("0");
+                }
+            }
+        }
+        int totalSteps = numericStrPairs + precision;
+        if (visualize) {
+            visualLog.append(String.format("Добування кореня для %s:\n\n", this));
+        }
+        for (int i = 0; i < totalSteps; i++) {
+            String pair = (i < numericStrPairs) ? numericStr.substring(i * 2, i * 2 + 2) : "00";
+            remainder = new StringNumeric(remainder.isZero() ? pair : remainder.toString() + pair);
+            // КРИТИЧНЕ ВИПРАВЛЕННЯ: Для p беремо корінь як ціле число (без крапки)
+            String currentRootWithoutDot = resRoot.toString().replace(".", "");
+            if (currentRootWithoutDot.isEmpty()) {
+                currentRootWithoutDot = "0";
+            }
+            StringNumeric p = new StringNumeric(currentRootWithoutDot).mul(new StringNumeric("20"));
+            int x = 0;
+            for (int j = 1; j <= 9; j++) {
+                StringNumeric candidateX = new StringNumeric(String.valueOf(j));
+                StringNumeric val = p.add(candidateX).mul(candidateX);
+                if (val.compareTo(remainder) <= 0) {
+                    x = j;
+                } else {
+                    break;
+                }
+            }
+            StringNumeric xNum = new StringNumeric(String.valueOf(x));
+            StringNumeric subtrahend = p.add(xNum).mul(xNum);
+            if (visualize) {
+                buildClassicSqrtStep(visualLog, i, remainder, currentRootWithoutDot, x, subtrahend, resRoot.toString(), precision);
+            }
+            remainder = remainder.sub(subtrahend);
+            resRoot.append(x);
+            // Крапку вставляємо якщо є ціла частина (integerPairs > 0),
+            // позиція крапки досягнута, і або потрібна decimal precision,
+            // або вхідне число саме дробове (halfScale > 0 дає «реальні» десяткові цифри).
+            // Якщо число дробове — «0.» вже додано до циклу.
+            if (integerPairs > 0 && i + 1 == decimalPointAt && (precision > 0 || halfScale > 0)) {
+                resRoot.append(".");
+            }
+        }
+        if (visualize) {
+            return new StringNumericRecord(
+                    new StringNumeric(resRoot.toString()),
+                    visualLog.toString()
+            );
+        }
+        return new StringNumericRecord(
+                new StringNumeric(resRoot.toString()),
+                null
+        );
+    }
+    private void buildClassicSqrtStep(StringBuilder sb, int step,
+                                      StringNumeric remainder, String p,
+                                      int x, StringNumeric subtrahend, String currentRoot,
+                                      int precision) {
+        // Рахуємо загальну довжину числа, що зараз у залишку (включаючи знесену пару)
+        String remStr = remainder.toString();
+        String subStr = subtrahend.toString();
+        if (step == 0) {
+            String line1 = "─".repeat(precision + ((int) precision / 2) + 4);
+            // Перший крок: малюємо заголовок
+            sb.append(String.format("√ %s   │\n", padLeft(remStr, precision + (int) precision / 2 - 1)));
+            sb.append(String.format("  %s   │ %d\n", padLeft(String.valueOf(x * x), precision + (int) precision / 2 - 1), x));
+            sb.append(line1.concat("┼───\n"));
+        } else {
+            String indentation = " ".repeat(step * 2);
+            String line1 = "─".repeat(precision + ((int) precision / 2) + 1);
+            String line2 = "─".repeat(remStr.length() + 3);
+            String line3 = " ".repeat(remStr.length() + 4);
+            String remLeft = remStr.substring(0, remStr.length() > 2 ? remStr.length() - 2 : remStr.length());
+            String remRight = remStr.substring(remStr.length() > 2 ? remStr.length() - 2 : remStr.length());
+            // Малюємо поточний етап
+            sb.append(String.format(" %s%s │ %s %s %s\n",
+                    indentation,
+                    padLeft(remStr, precision + (int) precision / 2),
+                    line3, remLeft, remRight));
+            sb.append(String.format("-%s%s │ %d%s(%s × 2 × 10 + %d) × %d = %s\n",
+                    indentation,
+                    padLeft(subStr, precision + ((int) precision / 2)),
+                    x, line3, p, x, x, subStr));
+            sb.append(String.format("%s%s─┴─┬%s Додаємо %d до результату: %s\n",
+                    indentation,
+                    line1, line2, x, currentRoot + x));
+        }
+    }
+    // -- операції над модулями --
+    /**
+     * Порівнює модулі двох чисел, не враховуючи знак. Повертає від'ємне
+     * значення, нуль або додатне залежно від того, чи
+     * {@code |a| < |b|}, {@code |a| == |b|} чи {@code |a| > |b|}.
+     */
+    private static int compareMagnitudes(StringNumeric a, StringNumeric b) {
+        int maxScale = Math.max(a.scale, b.scale);
+        String as = a.digits + "0".repeat(maxScale - a.scale);
+        String bs = b.digits + "0".repeat(maxScale - b.scale);
+        if (as.length() != bs.length()) {
+            return Integer.compare(as.length(), bs.length());
+        }
+        return as.compareTo(bs);
+    }
+    /**
+     * Спільне ядро для додавання й віднімання модулів. Вирівнює обидва операнди
+     * за десятковою крапкою, потім обходить розряди справа наліво, застосовуючи
+     * {@code operation} до кожної пари цифр разом із переносом/позикою.
+     *
+     * @param isAddition {@code true} — будує візуалізацію додавання,
+     * {@code false} — віднімання
+     */
+    private static StringNumeric Magnitudes(
+            StringNumeric a,
+            StringNumeric b,
+            boolean visualize,
+            ColumnOperation operation,
+            boolean isAddition) {   // для вибору візуалізації
+        StringNumericRecord recordMagnitudes = magnitudes(a, b, visualize, operation, isAddition);
+        if (visualize) {
+            System.out.println(recordMagnitudes.visualize());
+        }
+        return recordMagnitudes.value();
+    }
+    private static StringNumericRecord magnitudes(
+            StringNumeric a,
+            StringNumeric b,
+            boolean visualize,
+            ColumnOperation operation,
+            boolean isAddition) {   // для вибору візуалізації
+        int maxScale = Math.max(a.scale, b.scale);
+        // === спільна частина (вирівнювання) ===
+        String as = a.digits + "0".repeat(maxScale - a.scale);
+        String bs = b.digits + "0".repeat(maxScale - b.scale);
+        int maxLen = Math.max(as.length(), bs.length());
+        String pa = "0".repeat(maxLen - as.length()) + as;
+        String pb = "0".repeat(maxLen - bs.length()) + bs;
+        int[] transfer = new int[maxLen + 1];           // для add — carry, для sub — borrow
+        int[] resultDigits = new int[maxLen + 1];
+        // === єдиний цикл (тепер однаковий для обох операцій) ===
+        for (int col = 0; col < maxLen; col++) {
+            int i = maxLen - 1 - col;
+            int da = pa.charAt(i) - '0';
+            int db = pb.charAt(i) - '0';
+            ColumnResult res = operation.apply(da, db, transfer[col]);
+            resultDigits[maxLen - col] = res.digit();   // результат цифри
+            transfer[col + 1] = res.nextTransfer();     // наступний перенос/позика
+        }
+        resultDigits[0] = transfer[maxLen];       // для sub завжди 0 (precondition |a| >= |b|)
+        // === побудова рядка (тепер однакова для add і sub) ===
+        StringBuilder sb = new StringBuilder();
+        if (resultDigits[0] > 0) {
+            sb.append((char) ('0' + resultDigits[0]));
+        }
+        for (int i = 1; i <= maxLen; i++) {
+            sb.append((char) ('0' + resultDigits[i]));
+        }
+        String resultStr = sb.toString();
+        // === візуалізація ===
+        if (visualize) {
+            if (isAddition) {
+                return new StringNumericRecord(
+                        normalize(resultStr, maxScale),
+                        buildAddVisualization(as, bs, resultStr, transfer, maxLen, maxScale)
+                );
+            } else {
+                return new StringNumericRecord(
+                        normalize(resultStr, maxScale),
+                        buildSubVisualization(as, bs, resultStr, transfer, maxLen, maxScale)
+                );
+                // transfer тут виконує роль incomingBorrow — значення ті самі (0/1)
+            }
+        }
+        return new StringNumericRecord(
+                normalize(resultStr, maxScale),
+                null
+        );
+    }
+    /**
+     * Складає модулі двох чисел. Передумова: обидва ненегативні.
+     */
+    private static StringNumericRecord addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        return magnitudes(a, b, visualize,
+                (da, db, cin) -> {
+                    int sum = da + db + cin;
+                    return new ColumnResult(sum % 10, sum / 10);
+                },
+                true);
+    }
+    /**
+     * Віднімає модуль {@code b} від модуля {@code a}. Передумова:
+     * {@code |a| >= |b|} — гарантується викликачем ({@code add()}).
+     */
+    private static StringNumericRecord subMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        // precondition: |a| >= |b| вже гарантується в add()
+        return magnitudes(a, b, visualize,
+                (da, db, bin) -> {
+                    int diff = da - db - bin;
+                    if (diff < 0) {
+                        diff += 10;
+                        return new ColumnResult(diff, 1);
+                    }
+                    return new ColumnResult(diff, 0);
+                },
+                false);
+    }
+    /**
+     * Множить модулі двох чисел шкільним алгоритмом: для кожної цифри множника
+     * обчислюється частковий добуток, потім усі часткові добутки
+     * підсумовуються.
+     */
+    private static StringNumeric MultiplyMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        StringNumericRecord recordMultiplyMagnitudes = multiplyMagnitudes(a, b, visualize);
+        if (visualize) {
+            System.out.println(recordMultiplyMagnitudes.visualize());
+        }
+        return recordMultiplyMagnitudes.value();
+    }
+    private static StringNumericRecord multiplyMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        if (a.isZero() || b.isZero()) {
+            if (visualize) {
+                return new StringNumericRecord(
+                        new StringNumeric("0", 0, false),
+                        buildMulVisualization(a.toString(), b.toString(), "0", new String[0])
+                );
+            } else {
+                return new StringNumericRecord(
+                        new StringNumeric("0", 0, false),
+                        null
+                );
+            }
+        }
+        String da = a.digits;
+        String db = b.digits;
+        int lenA = da.length();
+        int lenB = db.length();
+        String[] partialProducts = new String[lenB];
+        int[] res = new int[lenA + lenB];
+        for (int j = lenB - 1; j >= 0; j--) {
+            int digitB = db.charAt(j) - '0';
+            int shift = lenB - 1 - j;
+            if (digitB == 0) {
+                partialProducts[shift] = "0";
+                continue;
+            }
+            StringBuilder partial = new StringBuilder();
+            int carry = 0;
+            for (int i = lenA - 1; i >= 0; i--) {
+                int product = (da.charAt(i) - '0') * digitB + carry;
+                partial.append(product % 10);
+                carry = product / 10;
+            }
+            while (carry > 0) {
+                partial.append(carry % 10);
+                carry /= 10;
+            }
+            String part = partial.reverse().toString();
+            partialProducts[shift] = part;
+            for (int k = 0; k < part.length(); k++) {
+                int digit = part.charAt(part.length() - 1 - k) - '0';
+                res[res.length - 1 - k - shift] += digit;
+            }
+        }
+        // carry
+        int carry = 0;
+        for (int i = res.length - 1; i >= 0; i--) {
+            int temp = res[i] + carry;
+            res[i] = temp % 10;
+            carry = temp / 10;
+        }
+        StringBuilder sb = new StringBuilder();
+        boolean leading = true;
+        for (int digit : res) {
+            if (leading && digit == 0) {
+                continue;
+            }
+            leading = false;
+            sb.append(digit);
+        }
+        String resultDigits = sb.length() == 0 ? "0" : sb.toString();
+        int totalScale = a.scale + b.scale;
+        if (visualize) {
+            String aDisplay = a.toString();           // зі знаком!
+            String bDisplay = b.toString();           // зі знаком!
+            String resultDisplay = insertDot(stripLeadingZeros(resultDigits), totalScale);
+            if (a.negative != b.negative && !resultDigits.equals("0")) {
+                resultDisplay = "-" + resultDisplay;
+            }
+            return new StringNumericRecord(
+                    normalize(resultDigits, totalScale),
+                    buildMulVisualization(aDisplay, bDisplay, resultDisplay, partialProducts)
+            );
+        }
+        return new StringNumericRecord(
+                normalize(resultDigits, totalScale),
+                null
+        );
+    }
+    /**
+     * Ділить модуль {@code dividend} на модуль {@code divisor} довгим діленням
+     * «в стовпчик».
+     *
+     * <p>
+     * Алгоритм:
+     * <ol>
+     * <li>Обидва операнди зводяться до цілих чисел через спільний
+     * {@code scale}.</li>
+     * <li>Цифри діленого знімаються по одній; якщо поточний залишок більший або
+     * рівний дільнику — обчислюється цифра частки через {@link BigInteger}
+     * (O(1)), інакше цифра частки дорівнює 0.</li>
+     * <li>Після вичерпання цифр діленого знімаються нулі (дробова частина)
+     * доти, доки не набрано {@code precision} знаків після коми.</li>
+     * </ol>
+     */
+    private static StringNumericRecord divideMagnitudes(StringNumeric dividend, StringNumeric divisor, int precision, boolean visualize) {
+        // 1. Приводимо до цілих чисел (прибираємо кому)
+        // Наприклад: 4.8 / 1.2 -> 48 / 12
+        int commonScale = Math.max(dividend.scale, divisor.scale);
+        String d1Digits = dividend.digits + "0".repeat(commonScale - dividend.scale);
+        String d2Digits = divisor.digits + "0".repeat(commonScale - divisor.scale);
+        // Прибираємо ведучі нулі для коректної роботи
+        d1Digits = stripLeadingZeros(d1Digits);
+        d2Digits = stripLeadingZeros(d2Digits);
+        StringNumeric div = new StringNumeric(d2Digits);
+        StringBuilder quotient = new StringBuilder();
+        String currentRemainder = "";
+        // Для візуалізації
+        java.util.List<String> steps = new java.util.ArrayList<>();
+        boolean hasStarted = false; // перша ненульова цифра частки вже зустрілася
+        // 2. Визначаємо, скільки знаків після коми ми хочемо (наприклад, 10)
+        int totalDigitsToProcess = d1Digits.length() + precision;
+        int dotPosition = d1Digits.length();
+        for (int i = 0; i < totalDigitsToProcess; i++) {
+            // Беремо наступну цифру або 0, якщо цифри діленого закінчилися
+            char nextDigit = (i < d1Digits.length()) ? d1Digits.charAt(i) : '0';
+            currentRemainder = stripLeadingZeros(currentRemainder + nextDigit);
+            if (currentRemainder.isEmpty()) {
+                currentRemainder = "0";
+            }
+            StringNumeric window = new StringNumeric(currentRemainder);
+            int qDigit = 0;
+            if (window.compareTo(div) >= 0) {
+//                // Підбираємо цифру частки
+//                while (window.compareTo(div) >= 0) {
+//                    window = window.sub(div);
+//                    qDigit++;
+//                }
+                qDigit = new BigInteger(currentRemainder)
+                        .divide(new BigInteger(d2Digits))
+                        .intValue();
+                window = new StringNumeric(
+                        new BigInteger(currentRemainder)
+                                .subtract(
+                                        new BigInteger(d2Digits)
+                                                .multiply(
+                                                        BigInteger.valueOf(qDigit)
+                                                )
+                                ).toString()
+                );
+            }
+            if (qDigit > 0) {
+                hasStarted = true;
+            }
+            if (visualize) {
+                if (qDigit > 0) {
+                    steps.add(currentRemainder);
+                    steps.add(div.mul(new StringNumeric(qDigit)).digits);
+                } else if (hasStarted && i < d1Digits.length()) {
+                    // Нульова цифра у цілій частині: показуємо знесення
+                    steps.add(currentRemainder);
+                    steps.add("0");
+                }
+            }
+            quotient.append(qDigit);
+            currentRemainder = window.digits;
+            // Додаємо крапку в рядок частки, якщо пройшли цілу частину
+            if (i == dotPosition - 1 && i < totalDigitsToProcess - 1) {
+                quotient.append('.');
+            }
+        }
+        String resultStr = quotient.toString();
+        // Якщо візуалізація увімкнена, тут можна викликати оновлений buildDivVisualization
+        // з використанням зібраних steps
+        if (visualize) {
+            return new StringNumericRecord(
+                    new StringNumeric(resultStr),
+                    buildDivVisualization(d1Digits, d2Digits, resultStr, steps)
+            );
+        }
+        return new StringNumericRecord(
+                new StringNumeric(resultStr),
+                null
+        );
+    }
+    // -- візуалізація --
+    /**
+     * Будує шкільний запис додавання в стовпчик, наприклад:
+     * <pre>
+     *  1
+     *  48.12
+     * +15.67
+     *  -----
+     *  63.79
+     * </pre>
+     */
+    private static String buildAddVisualization(String aRaw, String bRaw, String resultRaw,
+                                                int[] carryInto, int maxLen, int scale) {
+        return buildVisualization(aRaw, bRaw, resultRaw, carryInto, maxLen, scale, '+', carry -> (char) ('0' + carry));
+    }
+    /**
+     * Будує шкільний запис віднімання в стовпчик, наприклад:
+     * <pre>
+     *  1
+     *  52
+     * -27
+     *  --
+     *  25
+     * </pre> Цифра {@code 1} над розрядом означає, що з нього була взята позика
+     * (фактично він зменшується на 1).
+     */
+    private static String buildSubVisualization(String aRaw, String bRaw, String resultRaw,
+                                                int[] incomingBorrow, int maxLen, int scale) {
+        return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-', borrow -> '1');
+    }
+    /**
+     * Спільне ядро рендерингу для додавання та віднімання. Вставляє десяткову
+     * крапку, вирівнює рядки по правому краю, розставляє мітки переносів/позик
+     * над відповідними розрядами.
+     *
+     * @param marks масив переносів (add) або позик (sub) по розрядах
+     * @param operationSign символ операції ({@code '+'} або {@code '-'})
+     * @param markToChar перетворює числове значення позначки на символ для
+     * відображення
+     */
+    private static String buildVisualization(String aRaw, String bRaw, String resultRaw,
+                                             int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
+        // вставляємо десяткову крапку лише для відображення
+        String a = insertDot(aRaw, scale);
+        String b = insertDot(bRaw, scale);
+        String result = insertDot(stripLeadingZeros(resultRaw), scale);
+        int dw = Math.max(Math.max(a.length(), b.length()), result.length());
+        // marks[] — це або carryInto (для додавання), або incomingBorrow (для віднімання)
+        char[] markChars = new char[dw];
+        Arrays.fill(markChars, ' ');
+        for (int col = 1; col <= maxLen; col++) {
+            if (marks[col] > 0) {
+                int dotShift = (scale > 0 && col >= scale) ? 1 : 0;
+                int idx = dw - 1 - col - dotShift;
+                if (idx >= 0) {
+                    markChars[idx] = markToChar.apply(marks[col]);
+                }
+            }
+        }
+        String markLine = (" " + new String(markChars)).stripTrailing();
+        StringBuilder vis = new StringBuilder();
+        if (!markLine.isBlank()) {
+            vis
+                    .append(markLine)
+                    .append('\n');
+        }
+        vis
+                .append(' ')
+                .append(padLeft(a, dw))
+                .append('\n')
+                .append(operationSign)
+                .append(padLeft(b, dw))
+                .append('\n')
+                .append(' ')
+                .repeat("─", dw)
+                .append('\n')
+                .append(' ')
+                .append(padLeft(result, dw));
+        return vis.toString();
+    }
+    /**
+     * Повна шкільна візуалізація множення з усіма частковими добутками.
+     */
+    private static String buildMulVisualization(String aStr, String bStr, String resultStr, String[] partials) {
+        int maxWidth = Math.max(Math.max(aStr.length(), bStr.length() + 2), resultStr.length());
+        for (String p : partials) {
+            if (p != null) {
+                maxWidth = Math.max(maxWidth, p.length() + 4);
+            }
+        }
+        StringBuilder vis = new StringBuilder();
+        vis
+                .append(padLeft(aStr, maxWidth))
+                .append('\n')
+                .append('×')
+                .append(padLeft(bStr, maxWidth - 1))
+                .append('\n')
+                .append("─".repeat(maxWidth))
+                .append('\n');
+        // Часткові добутки (завжди позитивні)
+        for (int i = 0; i < partials.length; i++) {
+            String part = partials[i];
+            if (part == null || (part.equals("0") && partials.length > 1)) {
+                continue;
+            }
+            String shifted = padLeft(part, maxWidth - i) + " ".repeat(i);
+            vis
+                    .append(shifted)
+                    .append('\n');
+        }
+        vis
+                .append("─".repeat(maxWidth))
+                .append('\n')
+                .append(padLeft(resultStr, maxWidth));
+        return vis.toString();
+    }
+    /**
+     * Будує шкільний запис ділення «кутиком», наприклад:
+     * <pre>
+     *   48120 │ 15678
+     *  -15678 ├────
+     *  ────── │ 3
+     *   32342
+     *   ...
+     * </pre> {@code steps} — список пар (window, subtracted): що ділимо і що
+     * віднімаємо на кожному кроці. Якщо {@code subtracted == "0"}, цифра частки
+     * нульова — малюємо лише роздільну лінію.
+     */
+    private static String buildDivVisualization(String d1, String d2, String quotient, java.util.List<String> steps) {
+        StringBuilder sb = new StringBuilder();
+        // Шапка: 48120 | 15678
+        sb
+                .append(" ")
+                .append(d1)
+                .append(" │ ")
+                .append(d2)
+                .append("\n");
+        // quotient може починатися з нулів, як у вашому прикладі - їх краще почистити для заголовка
+        String cleanQuotient = quotient.replaceFirst("^0+", "");
+        if (cleanQuotient.startsWith(".")) {
+            cleanQuotient = "0" + cleanQuotient;
+        }
+        int currentPos = 0;
+        for (int i = 0; i < steps.size(); i += 2) {
+            String window = steps.get(i);      // Що зараз ділимо (напр. 48120)
+            String subtracted = steps.get(i + 1); // Що віднімаємо (напр. 47034)
+            // Визначаємо відступ. У стовпчику він збільшується поступово
+            String indent = " ".repeat(currentPos);
+            // Малюємо поточне число (остачу з минулого кроку + знесену цифру)
+            if (i > 0) {
+                sb
+                        .append(" ")
+                        .append(indent)
+                        .append(window)
+                        .append("\n");
+            }
+            if (subtracted.equals("0")) {
+                // Нульова цифра частки: знесене число менше дільника, рядок віднімання не потрібен
+                sb.append(indent).append("─".repeat(window.length() + 1)).append("\n");
+            } else {
+                // Малюємо віднімання
+                sb
+                        .append(indent)
+                        .append(" ".repeat(Math.abs(subtracted.length() - window.length())))
+                        .append("-")
+                        .append(subtracted);
+                if (i == 0) {
+                    sb
+                            .append(" ".repeat(Math.max(0, d1.length() - window.length())))
+                            .append(" ├") // ╰
+                            .append("─".repeat(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", "").length() + 2));
+                }
+                sb.append("\n");
+                // Лінія підкреслення довжиною з вікно
+                sb.append(indent).append("─".repeat(Math.max(subtracted.length(), window.length()) + 1));
+                if (i == 0) {
+                    sb
+                            .append(" ".repeat(Math.max(0, d1.length() - window.length() + 1)))
+                            .append("│ ")
+                            .append(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", ""));
+                }
+                sb.append("\n");
+            }
+            // Розраховуємо позицію для наступного кроку
+            // currentPos зміщується вправо залежно від того, скільки цифр "з'їло" віднімання
+            int remainderLen = new StringNumeric(window).sub(new StringNumeric(subtracted)).digits.length();
+            if (window.equals(subtracted)) {
+                remainderLen = 0;
+            }
+            currentPos += (window.length() - remainderLen);
+        }
+        return sb.toString();
+    }
+    private static String buildSqrtVisualization(BigInteger target, BigInteger[][] table, int bestR, int bestC) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Пошук наближеного кореня для: ").append(target).append("\n");
+        sb.append("Фрагмент таблиці квадратів (десятки \\ одиниці):\n\n");
+        // Визначаємо межі відображення (наприклад, +/- 2 рядки від знайденого)
+        int startR = Math.max(0, bestR - 2);
+        int endR = Math.min(table.length - 1, bestR + 2);
+        // Шапка стовпців (одиниці)
+        sb.append("   | ");
+        for (int c = 0; c < 10; c++) {
+            sb.append(String.format("%10d ", c));
+        }
+        sb.append("\n───┼─").append("───────────".repeat(10)).append("\n");
+        // Рядки таблиці
+        for (int r = startR; r <= endR; r++) {
+            sb.append(String.format("%2d0| ", r)); // Початок десятка
+            for (int c = 0; c < 10; c++) {
+                BigInteger val = table[r][c];
+                String cell = val.toString();
+                if (r == bestR && c == bestC) {
+                    // Виділяємо знайдений корінь
+                    sb.append(String.format("≈[%8s]", cell));
+                } else {
+                    sb.append(String.format("%10s ", cell));
+                }
+            }
+            sb.append("\n");
+        }
+        sb.append("\nНайближче значення: ").append(table[bestR][bestC]);
+        sb.append(" (різниця: ").append(table[bestR][bestC].subtract(target).abs()).append(")");
+        sb.append("\nЗнайдений корінь: ").append(bestR).append(bestC).append("\n");
+        return sb.toString();
+    }
+    // --- Number ---
+    /**
+     * Повертає ціле значення (відкидає дробову частину). Якщо значення виходить
+     * за межі {@code int} — можливе переповнення.
+     */
+    @Override
+    public int intValue() {
+        return (int) longValue();
+    }
+    /**
+     * Повертає ціле значення як {@code long} (відкидає дробову частину).
+     *
+     * @throws ArithmeticException якщо значення виходить за межі {@code long}
+     */
+    @Override
+    public long longValue() {
+        long abs = new BigInteger(digits)
+                .divide(BigInteger.TEN.pow(scale))
+                .longValueExact();
+        return negative ? -abs : abs;
+    }
+    /**
+     * Повертає наближене значення у типі {@code float}.
+     */
+    @Override
+    public float floatValue() {
+        return Float.parseFloat(toString());
+    }
+    /**
+     * Повертає наближене значення у типі {@code double}.
+     */
+    @Override
+    public double doubleValue() {
+        return Double.parseDouble(toString());
+    }
+    /**
+     * Повертає ціле значення як {@link BigInteger} (відкидає дробову частину,
+     * тобто округлення вниз). Коректно працює як для цілих, так і для дробових
+     * чисел.
+     */
+    public BigInteger toBigInteger() {
+        BigInteger abs = scale == 0
+                         ? new BigInteger(digits)
+                         : new BigInteger(digits).divide(BigInteger.TEN.pow(scale));
+        return negative ? abs.negate() : abs;
+    }
+    // --- Comparable ---
+    /**
+     * Порівнює це число з {@code other}. Спочатку порівнюються знаки, потім —
+     * модулі (для від'ємних: більший модуль → менше значення).
+     *
+     * @param other
+     */
+    @Override
+    public int compareTo(StringNumeric other) {
+        if (this.negative != other.negative) {
+            return this.negative ? -1 : 1;
+        }
+        int cmp = compareMagnitudes(this, other);
+        return this.negative ? -cmp : cmp; // for negatives: larger magnitude is smaller value
+    }
+    // --- Object ---
+    /**
+     * Два числа рівні, якщо у них однакові {@code digits}, {@code scale} і
+     * {@code negative}. Це відповідає математичній рівності після нормалізації.
+     *
+     * @param o
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof StringNumeric sn)) {
+            return false;
+        }
+        return negative == sn.negative && scale == sn.scale && digits.equals(sn.digits);
+    }
+    /**
+     * Узгоджений з {@code equals}: однакові числа мають однаковий хеш.
+     *
+     * @return
+     */
+    @Override
+    public int hashCode() {
+        return 31 * (31 * digits.hashCode() + scale) + Boolean.hashCode(negative);
+    }
+    /**
+     * Повертає десяткове рядкове представлення з десятковою крапкою та знаком
+     * (якщо від'ємне).
+     *
+     * @return
+     */
+    @Override
+    public String toString() {
+        String abs = insertDot(digits, scale);
+        return negative ? "-" + abs : abs;
+    }
+    // --- допоміжні методи ---
+    /**
+     * Вставляє десяткову крапку на {@code scale} позицій від правого краю рядка
+     * цифр. Якщо {@code scale == 0} — повертає рядок без змін. Якщо цілова
+     * частина відсутня (наприклад {@code scale >= s.length()}) — додає
+     * {@code "0."} і нулі-заповнювачі.
+     */
+    private static String insertDot(String s, int scale) {
+        if (scale == 0) {
+            return s;
+        }
+        int intLen = s.length() - scale;
+        if (intLen > 0) {
+            return s.substring(0, intLen) + "." + s.substring(intLen);
+        }
+        return "0." + "0".repeat(-intLen) + s;
+    }
+    /**
+     * Вирівнює рядок {@code s} по правому краю до ширини {@code width}
+     * пробілами зліва.
+     */
+    private static String padLeft(String s, int width) {
+        if (s.length() >= width) {
+            return s;
+        }
+        return " ".repeat(width - s.length()) + s;
+    }
+    /**
+     * Нормалізує рядок цифр: прибирає хвостові нулі дробової частини та
+     * провідні нулі, і повертає ненегативний {@code StringNumeric}. Знак
+     * застосовується викликачем.
+     */
+    private static StringNumeric normalize(String rawDigits, int scale) {
+        returnStripZeros stripZeros = stripZeros(rawDigits, scale);
+        if (stripZeros.digit.isEmpty()) {
+            return new StringNumeric("0", 0, false);
+        }
+        return new StringNumeric(stripZeros.digit, stripZeros.scale, false);
+    }
+    /**
+     * Прибирає хвостові нулі дробової частини та провідні нулі, зменшуючи
+     * {@code scale} відповідно. Якщо після очищення рядок порожній — повертає
+     * {@code "0"}.
+     */
+    private static returnStripZeros stripZeros(String rawDigits, int scale) {
+        String d = stripLeadingZeros(rawDigits);
+        int s = scale;
+        while (s > 0 && !d.isEmpty() && d.charAt(d.length() - 1) == '0') {
+            d = d.substring(0, d.length() - 1);
+            s--;
+        }
+        d = d.isEmpty() ? "0" : d;
+        return new returnStripZeros(d, s);
+    }
+    /**
+     * Прибирає провідні нулі з рядка цифр; порожній рядок повертається без
+     * змін.
+     */
+    private static String stripLeadingZeros(String s) {
+        return s.replaceAll("^0+", "");
+    }
+}
+/*
+ * File:  src/main/java/ua/org/olden/stringnumeric/StringNumericRecord.java
+ */
+package ua.org.olden.stringnumeric;
+/**
+ *
+ * @author olden
+ */
+//public class StringNumericRecord {
+//
+//    private final StringNumeric value;
+//    private final String visualize;
+//
+//    public StringNumericRecord(StringNumeric value, String visualize) {
+//        this.value = value;
+//        this.visualize = visualize;
+//    }
+//
+//    public StringNumeric value() {
+//        return value;
+//    }
+//
+//    public String visualize() {
+//        return this.visualize;
+//    }
+//
+//}
+public record StringNumericRecord(StringNumeric value, String visualize) {
+}
+/*
+ * File:  src/main/java/ua/org/olden/stringnumeric/StringNumericDemo.java
+ */
+package ua.org.olden.stringnumeric;
+public class StringNumericDemo {
+    public static void main(String[] args) {
+        section("Конструктори");
+        demo("String", new StringNumeric("-0.00"));
+        demo("String", new StringNumeric("-0.0"));
+        demo("String", new StringNumeric("-0"));
+        demo("String", new StringNumeric("48.12"));
+        demo("int", new StringNumeric(42));
+        demo("long", new StringNumeric(123_456_789_012_345L));
+        demo("double scale=2", new StringNumeric(3.14159, 2));
+        demo("float  scale=4", new StringNumeric(2.71828f, 4));
+        demo("нормалізація", new StringNumeric("007.500"));
+        section("Додавання цілих");
+        add("29", "12");
+        add("999", "1");
+        add("123456789", "987654321");
+        section("Додавання дробових");
+        add("48.12", "15.67");
+        add("1.5", "2.25");
+        add("9.99", "0.01");
+        add("0.1", "0.9");
+        section("Числа за межами long");
+        add("99999999999999999999", "1");
+        add("99999999999999999999999999", "99999999999999999999999999");
+        section("Віднімання цілих");
+        sub("41", "12");
+        sub("1000", "1");
+        sub("1111111110", "987654321");
+        section("Віднімання дробових");
+        sub("63.79", "15.67");
+        sub("3.75", "1.5");
+        sub("10", "9.99");
+        sub("1", "0.9");
+        section("Числа за межами long");
+        sub("100000000000000000000", "1");
+        section("Порівняння та рівність");
+        cmp("42", "43");
+        cmp("100", "99");
+        cmp("3.14", "3.14");
+        cmp("1.50", "1.5");
+        section("Візуалізація додавання");
+        new StringNumeric("29").add(new StringNumeric("12"), true);
+        System.out.println();
+        new StringNumeric("99").add(new StringNumeric("1"), true);
+        System.out.println();
+        new StringNumeric("48.12").add(new StringNumeric("15.67"), true);
+        section("Візуалізація віднімання");
+        new StringNumeric("52").sub(new StringNumeric("27"), true);
+        System.out.println();
+        new StringNumeric("100").sub(new StringNumeric("1"), true);
+        System.out.println();
+        new StringNumeric("63.79").sub(new StringNumeric("15.67"), true);
+        // ── від'ємні числа ────────────────────────────────────────────────────
+        section("Від'ємні числа — конструктори");
+        demo("String \"-42\"", new StringNumeric("-42"));
+        demo("String \"-3.14\"", new StringNumeric("-3.14"));
+        demo("long -42", new StringNumeric(-42L));
+        demo("double -3.14159 s=2", new StringNumeric(-3.14159, 2));
+        demo("float  -2.71828 s=4", new StringNumeric(-2.71828f, 4));
+        demo("\"-0\" → 0", new StringNumeric("-0"));
+        section("Від'ємні числа — додавання");
+        add("-1", "-2");    // обидва від'ємні
+        add("-5", "3");     // |від'ємний| > |додатний|
+        add("3", "-5");    // |додатний| < |від'ємний|
+        add("-5", "5");     // взаємно скасовуються → 0
+        add("-1.5", "1");
+        add("1", "-1.5");
+        add("-99999999999999999999", "99999999999999999999"); // великі числа
+        section("Від'ємні числа — віднімання");
+        sub("1", "2");     // додатний мінус більший → від'ємний
+        sub("0", "5");
+        sub("-5", "-3");     // -5 - (-3) = -2
+        sub("-3", "-5");     // -3 - (-5) = +2
+        sub("-1", "2");     // від'ємний мінус додатний
+        sub("5", "-3");     // додатний мінус від'ємний → більший додатний
+        sub("1.5", "3");
+        sub("-1.5", "-3");
+        section("Від'ємні числа — negate");
+        demo("negate(5)", new StringNumeric("5").negate());
+        demo("negate(-5)", new StringNumeric("-5").negate());
+        demo("negate(0)", new StringNumeric("0").negate());
+        demo("negate(-0.5)", new StringNumeric("-0.5").negate());
+        section("Від'ємні числа — порівняння та рівність");
+        cmp("-5", "3");
+        cmp("-5", "-3");
+        cmp("-3", "-5");
+        cmp("-42", "-42");
+        section("\"Складні\" операції з від'ємними числами");
+        System.out.println("Доодаємо до 48.12 значення -15.67 = "
+                + new StringNumeric("48.12").add(new StringNumeric("-15.67"), false));
+        new StringNumeric("48.12").add(new StringNumeric("-15.67"), true);
+        System.out.println("Доодаємо до -48.12 значення 15.67 = "
+                + new StringNumeric("-48.12").add(new StringNumeric("15.67"), false));
+        new StringNumeric("-48.12").add(new StringNumeric("15.67"), true);
+        System.out.println("Доодаємо до -48.12 значення -15.67 = "
+                + new StringNumeric("-48.12").add(new StringNumeric("-15.67"), false));
+        new StringNumeric("-48.12").add(new StringNumeric("-15.67"), true);
+        System.out.println();
+        System.out.println("Віднімаємо від -63.79 значення 15.67 = "
+                + new StringNumeric("-63.79").sub(new StringNumeric("15.67"), false));
+        new StringNumeric("-63.79").sub(new StringNumeric("15.67"), true);
+        System.out.println("Віднімаємо від 63.79 значення -15.67 = "
+                + new StringNumeric("63.79").sub(new StringNumeric("-15.67"), false));
+        new StringNumeric("63.79").sub(new StringNumeric("-15.67"), true);
+        System.out.println("Віднімаємо від -63.79 значення -15.67 = "
+                + new StringNumeric("-63.79").sub(new StringNumeric("-15.67"), false));
+        new StringNumeric("-63.79").sub(new StringNumeric("-15.67"), true);
+        section("Множення цілих");
+        mul("29", "12");
+        mul("999", "1");
+        mul("123456789", "987654321");
+        section("Множення дробових");
+        mul("48.12", "15.67");
+        mul("1.5", "2.25");
+        mul("9.99", "0.01");
+        mul("0.1", "0.9");
+        section("Числа за межами long");
+        mul("99999999999999999999", "12345678901234567890");
+        section("Множення від'ємних");
+        mul("-5", "3");
+        mul("3", "-5");
+        mul("-5", "-3");
+        mul("-1.5", "2.25");
+        mul("-1.5", "-2.5");
+        section("Візуалізація множення");
+        System.out.println(new StringNumeric("29") + "×" + new StringNumeric("12") + "="
+                + new StringNumeric("29").mul(new StringNumeric("12")));
+        new StringNumeric("29").mul(new StringNumeric("12"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("-29") + "×" + new StringNumeric("12") + "="
+                + new StringNumeric("-29").mul(new StringNumeric("12")));
+        new StringNumeric("-29").mul(new StringNumeric("12"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("48.12") + "×" + new StringNumeric("15.67") + "="
+                + new StringNumeric("48.12").mul(new StringNumeric("15.67")));
+        new StringNumeric("48.12").mul(new StringNumeric("15.67"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("48.12") + "×" + new StringNumeric("-15.67") + "="
+                + new StringNumeric("48.12").mul(new StringNumeric("-15.67")));
+        new StringNumeric("48.12").mul(new StringNumeric("-15.67"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("99") + "×" + new StringNumeric("99") + "="
+                + new StringNumeric("99").mul(new StringNumeric("99")));
+        new StringNumeric("99").mul(new StringNumeric("99"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("-99") + "×" + new StringNumeric("-99") + "="
+                + new StringNumeric("-99").mul(new StringNumeric("-99")));
+        new StringNumeric("-99").mul(new StringNumeric("-99"), true);
+        System.out.println();
+        System.out.println(new StringNumeric("29") + "×" + new StringNumeric("12") + "="
+                + new StringNumeric("29").mul(new StringNumeric("12")));
+        new StringNumeric("29").mul(new StringNumeric("12"), true);
+        section("Ділення цілих");
+        div("41", "12");
+        div("100", "4");
+        div("123456789", "987654321");
+        section("Ділення дробових");
+        div("48.12", "15.67");
+        div("3.75", "1.5");
+        div("10", "4");
+        div("1", "0.9");
+        div("0.1", "0.3");
+        section("Ділення з великими числами");
+        div("99999999999999999999", "123456789");
+        section("Ділення від'ємних");
+        div("-15", "3");
+        div("15", "-3");
+        div("-15", "-3");
+        div("-3.75", "1.5");
+        div("3.75", "-1.5");
+        section("Візуалізація ділення");
+        divVis("48.12", "15.67");
+        divVis("-100", "4");
+        divVis("1", "0.9");
+        divVis("48.12", "15.678");
+        divVis("700", "7");
+        section("Корні");
+        sqrt("25");
+        sqrt("10");
+        sqrt("250");
+        sqrt("5253");
+        sqrt("52.53");
+        sqrt("100.500");
+        sqrt("109912");
+    }
+    // --- helpers ---
+    private static void section(String title) {
+        System.out.println("\n── " + title + " " + "─".repeat(Math.max(0, 40 - title.length())));
+    }
+    private static void demo(String label, StringNumeric n) {
+        System.out.printf("  %-22s → %s%n", label, n);
+    }
+    private static void add(String a, String b) {
+        StringNumeric result = new StringNumeric(a).add(new StringNumeric(b));
+        System.out.printf("  %s + %s = %s%n", a, b, result);
+    }
+    private static void sub(String a, String b) {
+        StringNumeric result = new StringNumeric(a).sub(new StringNumeric(b));
+        System.out.printf("  %s - %s = %s%n", a, b, result);
+    }
+    private static void mul(String a, String b) {
+        StringNumeric result = new StringNumeric(a).mul(new StringNumeric(b));
+        System.out.printf("  %s × %s = %s%n", a, b, result);
+    }
+    private static void div(String a, String b) {
+        StringNumeric result = new StringNumeric(a).div(new StringNumeric(b));
+        System.out.printf("  %s ÷ %s = %s%n", a, b, result);
+    }
+    private static void divVis(String a, String b) {
+        System.out.println(new StringNumeric(a) + " ÷ " + new StringNumeric(b) + " = "
+                + new StringNumeric(a).div(new StringNumeric(b)));
+        new StringNumeric(a).div(new StringNumeric(b), true);
+        System.out.println();
+    }
+    private static void cmp(String a, String b) {
+        StringNumeric na = new StringNumeric(a);
+        StringNumeric nb = new StringNumeric(b);
+        int c = na.compareTo(nb);
+        String rel = c < 0 ? "<" : c > 0 ? ">" : "=";
+        System.out.printf("  %s %s %s  (equals: %b)%n", a, rel, b, na.equals(nb));
+    }
+    private static void sqrt(String a) {
+        StringNumeric na = new StringNumeric(a);
+        System.out.printf("  Табличний √%s ≈ %s%n", a, na.sqrtApproximate());
+        System.out.printf("  Табличний з візуалізацією √%s ≈ %s%n", a, na.SqrtApproximate(true));
+        System.out.printf("  Інтерактивний √%s ≈ %s%n", a, na.sqrtIterative());
+        System.out.printf("  Інтерактивний з візуалізацією √%s ≈ %s%n", a, na.sqrtIterative(true));
+        System.out.printf("  Стовпчиком √%s ≈ %s%n", a, na.sqrtLongDivision());
+        System.out.printf("  Стовпчиком з візуалізацією √%s ≈ %s%n", a, na.sqrtLongDivision(true));
+        System.out.println();
+    }
+}
+/*
+ * File:  src/main/java/module-info.java
+ */
+module ua.org.olden.stringnumeric {
+    // 'requires transitive' гарантує, що будь-який модуль, який читає цей модуль, 
+    // також бачитиме java.base (де лежить Record) у правильному контексті.
+    requires transitive java.base;
+    exports ua.org.olden.stringnumeric;
+}
+/*
+ * File:  README.md
+ */
+# StringNumeric
+Математичні алгоритми "в стовпчик" з візуалізацією.
+Колись в моєму житті була "олімпіадна задачка" —
+реалізувати додання двох цифр в стовпчик. При
+цьому малося на увазі, що на вході дві строки,
+а в стовпчик значило не просто намалювати ці 
+строки одна під одною і вивести результат, а 
+зробити емуляцію того самого ручного алгоритму, 
+коли людина додає одне число до іншого "в стовпчик". 
+Проте такі методи "в стовпчик" існують не тільки 
+для додання... В цьому проекті спробував їх всі 
+реалізувати.
+## Приклад роботи програми
+```
+── Конструктори ────────────────────────────
+  String                 → 0
+  String                 → 0
+  String                 → 0
+  String                 → 48.12
+  int                    → 42
+  long                   → 123456789012345
+  double scale=2         → 3.14
+  float  scale=4         → 2.7183
+  нормалізація           → 7.5
+── Додавання цілих ─────────────────────────
+  29 + 12 = 41
+  999 + 1 = 1000
+  123456789 + 987654321 = 1111111110
+── Додавання дробових ──────────────────────
+  48.12 + 15.67 = 63.79
+  1.5 + 2.25 = 3.75
+  9.99 + 0.01 = 10
+  0.1 + 0.9 = 1
+── Числа за межами long ────────────────────
+  99999999999999999999 + 1 = 100000000000000000000
+  99999999999999999999999999 + 99999999999999999999999999 = 199999999999999999999999998
+── Віднімання цілих ────────────────────────
+  41 - 12 = 29
+  1000 - 1 = 999
+  1111111110 - 987654321 = 123456789
+── Віднімання дробових ─────────────────────
+  63.79 - 15.67 = 48.12
+  3.75 - 1.5 = 2.25
+  10 - 9.99 = 0.01
+  1 - 0.9 = 0.1
+── Числа за межами long ────────────────────
+  100000000000000000000 - 1 = 99999999999999999999
+── Порівняння та рівність ──────────────────
+  42 < 43  (equals: false)
+  100 > 99  (equals: false)
+  3.14 = 3.14  (equals: true)
+  1.50 = 1.5  (equals: true)
+── Візуалізація додавання ──────────────────
+ 1
+ 29
++12
+ --
+ 41
+ 11
+  99
++  1
+ ---
+ 100
+ 1
+ 48.12
++15.67
+ -----
+ 63.79
+── Візуалізація віднімання ─────────────────
+ 1
+ 52
+-27
+ --
+ 25
+ 11
+ 100
+-  1
+ ---
+  99
+ 1
+ 63.79
+-15.67
+ -----
+ 48.12
+── Від'ємні числа — конструктори ───────────
+  String "-42"           → -42
+  String "-3.14"         → -3.14
+  long -42               → -42
+  double -3.14159 s=2    → -3.14
+  float  -2.71828 s=4    → -2.7183
+  "-0" → 0               → 0
+── Від'ємні числа — додавання ──────────────
+  -1 + -2 = -3
+  -5 + 3 = -2
+  3 + -5 = -2
+  -5 + 5 = 0
+  -1.5 + 1 = -0.5
+  1 + -1.5 = -0.5
+  -99999999999999999999 + 99999999999999999999 = 0
+── Від'ємні числа — віднімання ─────────────
+  1 - 2 = -1
+  0 - 5 = -5
+  -5 - -3 = -2
+  -3 - -5 = 2
+  -1 - 2 = -3
+  5 - -3 = 8
+  1.5 - 3 = -1.5
+  -1.5 - -3 = 1.5
+── Від'ємні числа — negate ─────────────────
+  negate(5)              → -5
+  negate(-5)             → 5
+  negate(0)              → 0
+  negate(-0.5)           → 0.5
+── Від'ємні числа — порівняння та рівність ─
+  -5 < 3  (equals: false)
+  -5 < -3  (equals: false)
+  -3 > -5  (equals: false)
+  -42 = -42  (equals: true)
+── "Складні" операції з від'ємними числами ─
+Доодаємо до 48.12 значення -15.67 = 32.45
+  1 1
+ 48.12
+-15.67
+ -----
+ 32.45
+Доодаємо до -48.12 значення 15.67 = -32.45
+  1 1
+ 48.12
+-15.67
+ -----
+ 32.45
+Доодаємо до -48.12 значення -15.67 = -63.79
+ 1
+ 48.12
++15.67
+ -----
+ 63.79
+Віднімаємо від -63.79 значення 15.67 = -79.46
+  1 1
+ 63.79
++15.67
+ -----
+ 79.46
+Віднімаємо від 63.79 значення -15.67 = 79.46
+  1 1
+ 63.79
++15.67
+ -----
+ 79.46
+Віднімаємо від -63.79 значення -15.67 = -48.12
+ 1
+ 63.79
+-15.67
+ -----
+ 48.12
+── Множення цілих ──────────────────────────
+  29 × 12 = 348
+  999 × 1 = 999
+  123456789 × 987654321 = 121932631112635269
+── Множення дробових ───────────────────────
+  48.12 × 15.67 = 754.0404
+  1.5 × 2.25 = 3.375
+  9.99 × 0.01 = 0.0999
+  0.1 × 0.9 = 0.09
+── Числа за межами long ────────────────────
+  99999999999999999999 × 12345678901234567890 = 1234567890123456788987654321098765432110
+── Множення від'ємних ──────────────────────
+  -5 × 3 = -15
+  3 × -5 = -15
+  -5 × -3 = 15
+  -1.5 × 2.25 = -3.375
+  -1.5 × -2.5 = 3.75
+── Візуалізація множення ───────────────────
+29×12=348
+    29
+×   12
+──────
+    58
+   29 
+──────
+   348
+-29×12=-348
+   -29
+×   12
+──────
+    58
+   29 
+──────
+  -348
+48.12×15.67=754.0404
+    48.12
+×   15.67
+─────────
+    33684
+   28872 
+  24060  
+  4812   
+─────────
+ 754.0404
+48.12×-15.67=-754.0404
+    48.12
+×  -15.67
+─────────
+    33684
+   28872 
+  24060  
+  4812   
+─────────
+-754.0404
+99×99=9801
+     99
+×    99
+───────
+    891
+   891 
+───────
+   9801
+-99×-99=9801
+    -99
+×   -99
+───────
+    891
+   891 
+───────
+   9801
+29×12=348
+    29
+×   12
+──────
+    58
+   29 
+──────
+   348
+── Ділення цілих ───────────────────────────
+  41 ÷ 12 = 3.4166666666
+  100 ÷ 4 = 25
+  123456789 ÷ 987654321 = 0.1249999988
+── Ділення дробових ────────────────────────
+  48.12 ÷ 15.67 = 3.0708359923
+  3.75 ÷ 1.5 = 2.5
+  10 ÷ 4 = 2.5
+  1 ÷ 0.9 = 1.1111111111
+  0.1 ÷ 0.3 = 0.3333333333
+── Ділення з великими числами ──────────────
+  99999999999999999999 ÷ 123456789 = 810000007371.000067068
+── Ділення від'ємних ───────────────────────
+  -15 ÷ 3 = -5
+  15 ÷ -3 = -5
+  -15 ÷ -3 = 5
+  -3.75 ÷ 1.5 = -2.5
+  3.75 ÷ -1.5 = -2.5
+── Візуалізація ділення ────────────────────
+48.12 ÷ 15.67 = 3.0708359923
+ 4812 │ 1567
+-4701 ├──────────────
+───── │ 3.0708359923
+  11100
+ -10969
+ ──────
+    13100
+   -12536
+   ──────
+      5640
+     -4701
+     ─────
+       9390
+      -7835
+      ─────
+       15550
+      -14103
+      ──────
+        14470
+       -14103
+       ──────
+          3670
+         -3134
+         ─────
+           5360
+          -4701
+          ─────
+-100 ÷ 4 = -25
+ 100 │ 4
+ -8  ├────
+───  │ 25
+  20
+ -20
+ ───
+1 ÷ 0.9 = 1.1111111111
+ 10 │ 9
+ -9 ├──────────────
+─── │ 1.1111111111
+  10
+  -9
+ ───
+   10
+   -9
+  ───
+    10
+    -9
+   ───
+     10
+     -9
+    ───
+      10
+      -9
+     ───
+       10
+       -9
+      ───
+        10
+        -9
+       ───
+         10
+         -9
+        ───
+          10
+          -9
+         ───
+           10
+           -9
+          ───
+48.12 ÷ 15.678 = 3.0692690394
+ 48120 │ 15678
+-47034 ├──────────────
+────── │ 3.0692690394
+  108600
+  -94068
+ ───────
+   145320
+  -141102
+  ───────
+     42180
+    -31356
+    ──────
+     108240
+     -94068
+    ───────
+      141720
+     -141102
+     ───────
+         61800
+        -47034
+        ──────
+         147660
+        -141102
+        ───────
+           65580
+          -62712
+          ──────
+700 ÷ 7 = 100
+ 700 │ 7
+-7   ├─────
+──   │ 100
+  0
+ ──
+   0
+  ──
+── Корні ───────────────────────────────────
+  Табличний √25 ≈ 5
+Пошук наближеного кореня для: 25
+Фрагмент таблиці квадратів (десятки \ одиниці):
+   |          0          1          2          3          4          5          6          7          8          9 
+───┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 00|          0          1          4          9         16 ≈[      25]        36         49         64         81 
+ 10|        100        121        144        169        196        225        256        289        324        361 
+ 20|        400        441        484        529        576        625        676        729        784        841 
+Найближче значення: 25 (різниця: 0)
+Знайдений корінь: 05
+  Табличний з візуалізацією √25 ≈ 5
+  Інтерактивний √25 ≈ 5
+Початкове наближення: 5
+Ітерація 1: 5
+Ітерація 2: 5
+Ітерація 3: 5
+Ітерація 4: 5
+Ітерація 5: 5
+Ітерація 6: 5
+Ітерація 7: 5
+  Інтерактивний з візуалізацією √25 ≈ 5
+  Стовпчиком √25 ≈ 5
+Добування кореня для 25:
+√             25   │
+              25   │ 5
+───────────────────┼───
+                 0 │       0 
+-                0 │ 0     (5 × 2 × 10 + 0) × 0 = 0
+  ─────────────────┴─┬──── Додаємо 0 до результату: 5.0
+                   0 │       0 
+-                  0 │ 0     (50 × 2 × 10 + 0) × 0 = 0
+    ─────────────────┴─┬──── Додаємо 0 до результату: 5.00
+                     0 │       0 
+-                    0 │ 0     (500 × 2 × 10 + 0) × 0 = 0
+      ─────────────────┴─┬──── Додаємо 0 до результату: 5.000
+                       0 │       0 
+-                      0 │ 0     (5000 × 2 × 10 + 0) × 0 = 0
+        ─────────────────┴─┬──── Додаємо 0 до результату: 5.0000
+                         0 │       0 
+-                        0 │ 0     (50000 × 2 × 10 + 0) × 0 = 0
+          ─────────────────┴─┬──── Додаємо 0 до результату: 5.00000
+                           0 │       0 
+-                          0 │ 0     (500000 × 2 × 10 + 0) × 0 = 0
+            ─────────────────┴─┬──── Додаємо 0 до результату: 5.000000
+                             0 │       0 
+-                            0 │ 0     (5000000 × 2 × 10 + 0) × 0 = 0
+              ─────────────────┴─┬──── Додаємо 0 до результату: 5.0000000
+                               0 │       0 
+-                              0 │ 0     (50000000 × 2 × 10 + 0) × 0 = 0
+                ─────────────────┴─┬──── Додаємо 0 до результату: 5.00000000
+                                 0 │       0 
+-                                0 │ 0     (500000000 × 2 × 10 + 0) × 0 = 0
+                  ─────────────────┴─┬──── Додаємо 0 до результату: 5.000000000
+                                   0 │       0 
+-                                  0 │ 0     (5000000000 × 2 × 10 + 0) × 0 = 0
+                    ─────────────────┴─┬──── Додаємо 0 до результату: 5.0000000000
+  Стовпчиком з візуалізацією √25 ≈ 5
+  Табличний √10 ≈ 3
+Пошук наближеного кореня для: 10
+Фрагмент таблиці квадратів (десятки \ одиниці):
+   |          0          1          2          3          4          5          6          7          8          9 
+───┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 00|          0          1          4 ≈[       9]        16         25         36         49         64         81 
+ 10|        100        121        144        169        196        225        256        289        324        361 
+Найближче значення: 9 (різниця: 1)
+Знайдений корінь: 03
+  Табличний з візуалізацією √10 ≈ 3
+  Інтерактивний √10 ≈ 3.1622776601
+Початкове наближення: 3
+Ітерація 1: 3.1666666666
+Ітерація 2: 3.1622807017
+Ітерація 3: 3.1622776601
+Ітерація 4: 3.1622776601
+Ітерація 5: 3.1622776601
+Ітерація 6: 3.1622776601
+Ітерація 7: 3.1622776601
+  Інтерактивний з візуалізацією √10 ≈ 3.1622776601
+  Стовпчиком √10 ≈ 3.1622776601
+Добування кореня для 10:
+√             10   │
+               9   │ 3
+───────────────────┼───
+               100 │         1 00
+-               61 │ 1       (3 × 2 × 10 + 1) × 1 = 61
+  ─────────────────┴─┬────── Додаємо 1 до результату: 3.1
+                3900 │          39 00
+-               3756 │ 6        (31 × 2 × 10 + 6) × 6 = 3756
+    ─────────────────┴─┬─────── Додаємо 6 до результату: 3.16
+                 14400 │           144 00
+-                12644 │ 2         (316 × 2 × 10 + 2) × 2 = 12644
+      ─────────────────┴─┬──────── Додаємо 2 до результату: 3.162
+                  175600 │            1756 00
+-                 126484 │ 2          (3162 × 2 × 10 + 2) × 2 = 126484
+        ─────────────────┴─┬───────── Додаємо 2 до результату: 3.1622
+                   4911600 │             49116 00
+-                  4427129 │ 7           (31622 × 2 × 10 + 7) × 7 = 4427129
+          ─────────────────┴─┬────────── Додаємо 7 до результату: 3.16227
+                    48447100 │              484471 00
+-                   44271829 │ 7            (316227 × 2 × 10 + 7) × 7 = 44271829
+            ─────────────────┴─┬─────────── Додаємо 7 до результату: 3.162277
+                     417527100 │               4175271 00
+-                    379473276 │ 6             (3162277 × 2 × 10 + 6) × 6 = 379473276
+              ─────────────────┴─┬──────────── Додаємо 6 до результату: 3.1622776
+                      3805382400 │                38053824 00
+-                     3794733156 │ 6              (31622776 × 2 × 10 + 6) × 6 = 3794733156
+                ─────────────────┴─┬───────────── Додаємо 6 до результату: 3.16227766
+                        1064924400 │                10649244 00
+-                                0 │ 0              (316227766 × 2 × 10 + 0) × 0 = 0
+                  ─────────────────┴─┬───────────── Додаємо 0 до результату: 3.162277660
+                        106492440000 │                  1064924400 00
+-                        63245553201 │ 1                (3162277660 × 2 × 10 + 1) × 1 = 63245553201
+                    ─────────────────┴─┬─────────────── Додаємо 1 до результату: 3.1622776601
+  Стовпчиком з візуалізацією √10 ≈ 3.1622776601
+  Табличний √250 ≈ 16
+Пошук наближеного кореня для: 250
+Фрагмент таблиці квадратів (десятки \ одиниці):
+   |          0          1          2          3          4          5          6          7          8          9 
+───┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 00|          0          1          4          9         16         25         36         49         64         81 
+ 10|        100        121        144        169        196        225 ≈[     256]       289        324        361 
+ 20|        400        441        484        529        576        625        676        729        784        841 
+ 30|        900        961       1024       1089       1156       1225       1296       1369       1444       1521 
+Найближче значення: 256 (різниця: 6)
+Знайдений корінь: 16
+  Табличний з візуалізацією √250 ≈ 16
+  Інтерактивний √250 ≈ 15.8113883008
+Початкове наближення: 16
+Ітерація 1: 15.8125
+Ітерація 2: 15.8113883399
+Ітерація 3: 15.8113883008
+Ітерація 4: 15.8113883008
+Ітерація 5: 15.8113883008
+Ітерація 6: 15.8113883008
+Ітерація 7: 15.8113883008
+  Інтерактивний з візуалізацією √250 ≈ 15.8113883008
+  Стовпчиком √250 ≈ 15.8113883008
+Добування кореня для 250:
+√              2   │
+               1   │ 1
+───────────────────┼───
+               150 │         1 50
+-              125 │ 5       (1 × 2 × 10 + 5) × 5 = 125
+  ─────────────────┴─┬────── Додаємо 5 до результату: 15
+                2500 │          25 00
+-               2464 │ 8        (15 × 2 × 10 + 8) × 8 = 2464
+    ─────────────────┴─┬─────── Додаємо 8 до результату: 15.8
+                  3600 │          36 00
+-                 3161 │ 1        (158 × 2 × 10 + 1) × 1 = 3161
+      ─────────────────┴─┬─────── Додаємо 1 до результату: 15.81
+                   43900 │           439 00
+-                  31621 │ 1         (1581 × 2 × 10 + 1) × 1 = 31621
+        ─────────────────┴─┬──────── Додаємо 1 до результату: 15.811
+                   1227900 │             12279 00
+-                   948669 │ 3           (15811 × 2 × 10 + 3) × 3 = 948669
+          ─────────────────┴─┬────────── Додаємо 3 до результату: 15.8113
+                    27923100 │              279231 00
+-                   25298144 │ 8            (158113 × 2 × 10 + 8) × 8 = 25298144
+            ─────────────────┴─┬─────────── Додаємо 8 до результату: 15.81138
+                     262495600 │               2624956 00
+-                    252982144 │ 8             (1581138 × 2 × 10 + 8) × 8 = 252982144
+              ─────────────────┴─┬──────────── Додаємо 8 до результату: 15.811388
+                       951345600 │               9513456 00
+-                      948683289 │ 3             (15811388 × 2 × 10 + 3) × 3 = 948683289
+                ─────────────────┴─┬──────────── Додаємо 3 до результату: 15.8113883
+                         266231100 │               2662311 00
+-                                0 │ 0             (158113883 × 2 × 10 + 0) × 0 = 0
+                  ─────────────────┴─┬──────────── Додаємо 0 до результату: 15.81138830
+                         26623110000 │                 266231100 00
+-                                  0 │ 0               (1581138830 × 2 × 10 + 0) × 0 = 0
+                    ─────────────────┴─┬────────────── Додаємо 0 до результату: 15.811388300
+                         2662311000000 │                   26623110000 00
+-                        2529822128064 │ 8                 (15811388300 × 2 × 10 + 8) × 8 = 2529822128064
+                      ─────────────────┴─┬──────────────── Додаємо 8 до результату: 15.8113883008
+  Стовпчиком з візуалізацією √250 ≈ 15.8113883008
+  Табличний √5253 ≈ 72
+Пошук наближеного кореня для: 5253
+Фрагмент таблиці квадратів (десятки \ одиниці):
+   |          0          1          2          3          4          5          6          7          8          9 
+───┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 50|       2500       2601       2704       2809       2916       3025       3136       3249       3364       3481 
+ 60|       3600       3721       3844       3969       4096       4225       4356       4489       4624       4761 
+ 70|       4900       5041 ≈[    5184]      5329       5476       5625       5776       5929       6084       6241 
+ 80|       6400       6561       6724       6889       7056       7225       7396       7569       7744       7921 
+ 90|       8100       8281       8464       8649       8836       9025       9216       9409       9604       9801 
+Найближче значення: 5184 (різниця: 69)
+Знайдений корінь: 72
+  Табличний з візуалізацією √5253 ≈ 72
+  Інтерактивний √5253 ≈ 72.4775827411
+Початкове наближення: 72
+Ітерація 1: 72.4791666666
+Ітерація 2: 72.4775827584
+Ітерація 3: 72.4775827411
+Ітерація 4: 72.4775827411
+Ітерація 5: 72.4775827411
+Ітерація 6: 72.4775827411
+Ітерація 7: 72.4775827411
+  Інтерактивний з візуалізацією √5253 ≈ 72.4775827411
+  Стовпчиком √5253 ≈ 72.4775827411
+Добування кореня для 5253:
+√             52   │
+              49   │ 7
+───────────────────┼───
+               353 │         3 53
+-              284 │ 2       (7 × 2 × 10 + 2) × 2 = 284
+  ─────────────────┴─┬────── Додаємо 2 до результату: 72
+                6900 │          69 00
+-               5776 │ 4        (72 × 2 × 10 + 4) × 4 = 5776
+    ─────────────────┴─┬─────── Додаємо 4 до результату: 72.4
+                112400 │            1124 00
+-               101409 │ 7          (724 × 2 × 10 + 7) × 7 = 101409
+      ─────────────────┴─┬───────── Додаємо 7 до результату: 72.47
+                 1099100 │             10991 00
+-                1014629 │ 7           (7247 × 2 × 10 + 7) × 7 = 1014629
+        ─────────────────┴─┬────────── Додаємо 7 до результату: 72.477
+                   8447100 │             84471 00
+-                  7247725 │ 5           (72477 × 2 × 10 + 5) × 5 = 7247725
+          ─────────────────┴─┬────────── Додаємо 5 до результату: 72.4775
+                   119937500 │               1199375 00
+-                  115964064 │ 8             (724775 × 2 × 10 + 8) × 8 = 115964064
+            ─────────────────┴─┬──────────── Додаємо 8 до результату: 72.47758
+                     397343600 │               3973436 00
+-                    289910324 │ 2             (7247758 × 2 × 10 + 2) × 2 = 289910324
+              ─────────────────┴─┬──────────── Додаємо 2 до результату: 72.477582
+                     10743327600 │                 107433276 00
+-                    10146861529 │ 7               (72477582 × 2 × 10 + 7) × 7 = 10146861529
+                ─────────────────┴─┬────────────── Додаємо 7 до результату: 72.4775827
+                       59646607100 │                 596466071 00
+-                      57982066176 │ 4               (724775827 × 2 × 10 + 4) × 4 = 57982066176
+                  ─────────────────┴─┬────────────── Додаємо 4 до результату: 72.47758274
+                        166454092400 │                  1664540924 00
+-                       144955165481 │ 1                (7247758274 × 2 × 10 + 1) × 1 = 144955165481
+                    ─────────────────┴─┬─────────────── Додаємо 1 до результату: 72.477582741
+                         2149892691900 │                   21498926919 00
+-                        1449551654821 │ 1                 (72477582741 × 2 × 10 + 1) × 1 = 1449551654821
+                      ─────────────────┴─┬──────────────── Додаємо 1 до результату: 72.4775827411
+  Стовпчиком з візуалізацією √5253 ≈ 72.4775827411
+  Табличний √52.53 ≈ 7
+Пошук наближеного кореня для: 52
+Фрагмент таблиці квадратів (десятки \ одиниці):
+   |          0          1          2          3          4          5          6          7          8          9 
+───┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 00|          0          1          4          9         16         25         36 ≈[      49]        64         81 
+ 10|        100        121        144        169        196        225        256        289        324        361 
+ 20|        400        441        484        529        576        625        676        729        784        841 
+Найближче значення: 49 (різниця: 3)
+Знайдений корінь: 07
+  Табличний з візуалізацією √52.53 ≈ 7
+  Інтерактивний √52.53 ≈ 7.2477582741
+Початкове наближення: 7
+Ітерація 1: 7.2521428571
+Ітерація 2: 7.2477595995
+Ітерація 3: 7.2477582741
+Ітерація 4: 7.2477582741
+Ітерація 5: 7.2477582741
+Ітерація 6: 7.2477582741
+Ітерація 7: 7.2477582741
+  Інтерактивний з візуалізацією √52.53 ≈ 7.2477582741
+  Стовпчиком √52.53 ≈ 7.24775827411
+Добування кореня для 52.53:
+√             52   │
+              49   │ 7
+───────────────────┼───
+               353 │         3 53
+-              284 │ 2       (7 × 2 × 10 + 2) × 2 = 284
+  ─────────────────┴─┬────── Додаємо 2 до результату: 7.2
+                6900 │          69 00
+-               5776 │ 4        (72 × 2 × 10 + 4) × 4 = 5776
+    ─────────────────┴─┬─────── Додаємо 4 до результату: 7.24
+                112400 │            1124 00
+-               101409 │ 7          (724 × 2 × 10 + 7) × 7 = 101409
+      ─────────────────┴─┬───────── Додаємо 7 до результату: 7.247
+                 1099100 │             10991 00
+-                1014629 │ 7           (7247 × 2 × 10 + 7) × 7 = 1014629
+        ─────────────────┴─┬────────── Додаємо 7 до результату: 7.2477
+                   8447100 │             84471 00
+-                  7247725 │ 5           (72477 × 2 × 10 + 5) × 5 = 7247725
+          ─────────────────┴─┬────────── Додаємо 5 до результату: 7.24775
+                   119937500 │               1199375 00
+-                  115964064 │ 8             (724775 × 2 × 10 + 8) × 8 = 115964064
+            ─────────────────┴─┬──────────── Додаємо 8 до результату: 7.247758
+                     397343600 │               3973436 00
+-                    289910324 │ 2             (7247758 × 2 × 10 + 2) × 2 = 289910324
+              ─────────────────┴─┬──────────── Додаємо 2 до результату: 7.2477582
+                     10743327600 │                 107433276 00
+-                    10146861529 │ 7               (72477582 × 2 × 10 + 7) × 7 = 10146861529
+                ─────────────────┴─┬────────────── Додаємо 7 до результату: 7.24775827
+                       59646607100 │                 596466071 00
+-                      57982066176 │ 4               (724775827 × 2 × 10 + 4) × 4 = 57982066176
+                  ─────────────────┴─┬────────────── Додаємо 4 до результату: 7.247758274
+                        166454092400 │                  1664540924 00
+-                       144955165481 │ 1                (7247758274 × 2 × 10 + 1) × 1 = 144955165481
+                    ─────────────────┴─┬─────────────── Додаємо 1 до результату: 7.2477582741
+                         2149892691900 │                   21498926919 00
+-                        1449551654821 │ 1                 (72477582741 × 2 × 10 + 1) × 1 = 1449551654821
+                      ─────────────────┴─┬──────────────── Додаємо 1 до результату: 7.24775827411
+  Стовпчиком з візуалізацією √52.53 ≈ 7.24775827411
+  Табличний √100.500 ≈ 10
+Пошук наближеного кореня для: 100
+Фрагмент таблиці квадратів (десятки \ одиниці):
+   |          0          1          2          3          4          5          6          7          8          9 
+───┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ 00|          0          1          4          9         16         25         36         49         64         81 
+ 10| ≈[     100]       121        144        169        196        225        256        289        324        361 
+ 20|        400        441        484        529        576        625        676        729        784        841 
+ 30|        900        961       1024       1089       1156       1225       1296       1369       1444       1521 
+Найближче значення: 100 (різниця: 0)
+Знайдений корінь: 10
+  Табличний з візуалізацією √100.500 ≈ 10
+  Інтерактивний √100.500 ≈ 10.0249688278
+Початкове наближення: 10
+Ітерація 1: 10.025
+Ітерація 2: 10.0249688279
+Ітерація 3: 10.0249688278
+Ітерація 4: 10.0249688278
+Ітерація 5: 10.0249688278
+Ітерація 6: 10.0249688278
+Ітерація 7: 10.0249688278
+  Інтерактивний з візуалізацією √100.500 ≈ 10.0249688278
+  Стовпчиком √100.500 ≈ 10.02496882788
+Добування кореня для 100.5:
+√              1   │
+               1   │ 1
+───────────────────┼───
+                 0 │       0 
+-                0 │ 0     (1 × 2 × 10 + 0) × 0 = 0
+  ─────────────────┴─┬──── Додаємо 0 до результату: 10
+                  50 │        50 
+-                  0 │ 0      (10 × 2 × 10 + 0) × 0 = 0
+    ─────────────────┴─┬───── Додаємо 0 до результату: 10.0
+                  5000 │          50 00
+-                 4004 │ 2        (100 × 2 × 10 + 2) × 2 = 4004
+      ─────────────────┴─┬─────── Додаємо 2 до результату: 10.02
+                   99600 │           996 00
+-                  80176 │ 4         (1002 × 2 × 10 + 4) × 4 = 80176
+        ─────────────────┴─┬──────── Додаємо 4 до результату: 10.024
+                   1942400 │             19424 00
+-                  1804401 │ 9           (10024 × 2 × 10 + 9) × 9 = 1804401
+          ─────────────────┴─┬────────── Додаємо 9 до результату: 10.0249
+                    13799900 │              137999 00
+-                   12029916 │ 6            (100249 × 2 × 10 + 6) × 6 = 12029916
+            ─────────────────┴─┬─────────── Додаємо 6 до результату: 10.02496
+                     176998400 │               1769984 00
+-                    160399424 │ 8             (1002496 × 2 × 10 + 8) × 8 = 160399424
+              ─────────────────┴─┬──────────── Додаємо 8 до результату: 10.024968
+                      1659897600 │                16598976 00
+-                     1603994944 │ 8              (10024968 × 2 × 10 + 8) × 8 = 1603994944
+                ─────────────────┴─┬───────────── Додаємо 8 до результату: 10.0249688
+                        5590265600 │                55902656 00
+-                       4009987524 │ 2              (100249688 × 2 × 10 + 2) × 2 = 4009987524
+                  ─────────────────┴─┬───────────── Додаємо 2 до результату: 10.02496882
+                        158027807600 │                  1580278076 00
+-                       140349563529 │ 7                (1002496882 × 2 × 10 + 7) × 7 = 140349563529
+                    ─────────────────┴─┬─────────────── Додаємо 7 до результату: 10.024968827
+                         1767824407100 │                   17678244071 00
+-                        1603995012384 │ 8                 (10024968827 × 2 × 10 + 8) × 8 = 1603995012384
+                      ─────────────────┴─┬──────────────── Додаємо 8 до результату: 10.0249688278
+                          16382939471600 │                    163829394716 00
+-                         16039950124544 │ 8                  (100249688278 × 2 × 10 + 8) × 8 = 16039950124544
+                        ─────────────────┴─┬───────────────── Додаємо 8 до результату: 10.02496882788
+  Стовпчиком з візуалізацією √100.500 ≈ 10.02496882788
+  Табличний √109912 ≈ 332
+Пошук наближеного кореня для: 109912
+Фрагмент таблиці квадратів (десятки \ одиниці):
+   |          0          1          2          3          4          5          6          7          8          9 
+───┼───────────────────────────────────────────────────────────────────────────────────────────────────────────────
+310|      96100      96721      97344      97969      98596      99225      99856     100489     101124     101761 
+320|     102400     103041     103684     104329     104976     105625     106276     106929     107584     108241 
+330|     108900     109561 ≈[  110224]    110889     111556     112225     112896     113569     114244     114921 
+340|     115600     116281     116964     117649     118336     119025     119716     120409     121104     121801 
+350|     122500     123201     123904     124609     125316     126025     126736     127449     128164     128881 
+Найближче значення: 110224 (різниця: 312)
+Знайдений корінь: 332
+  Табличний з візуалізацією √109912 ≈ 332
+  Інтерактивний √109912 ≈ 331.5297875003
+Початкове наближення: 332
+Ітерація 1: 331.5301204819
+Ітерація 2: 331.5297875004
+Ітерація 3: 331.5297875003
+Ітерація 4: 331.5297875003
+Ітерація 5: 331.5297875003
+Ітерація 6: 331.5297875003
+Ітерація 7: 331.5297875003
+  Інтерактивний з візуалізацією √109912 ≈ 331.5297875003
+  Стовпчиком √109912 ≈ 331.5297875003
+Добування кореня для 109912:
+√             10   │
+               9   │ 3
+───────────────────┼───
+               199 │         1 99
+-              189 │ 3       (3 × 2 × 10 + 3) × 3 = 189
+  ─────────────────┴─┬────── Додаємо 3 до результату: 33
+                1012 │          10 12
+-                661 │ 1        (33 × 2 × 10 + 1) × 1 = 661
+    ─────────────────┴─┬─────── Додаємо 1 до результату: 331
+                 35100 │           351 00
+-                33125 │ 5         (331 × 2 × 10 + 5) × 5 = 33125
+      ─────────────────┴─┬──────── Додаємо 5 до результату: 331.5
+                  197500 │            1975 00
+-                 132604 │ 2          (3315 × 2 × 10 + 2) × 2 = 132604
+        ─────────────────┴─┬───────── Додаємо 2 до результату: 331.52
+                   6489600 │             64896 00
+-                  5967441 │ 9           (33152 × 2 × 10 + 9) × 9 = 5967441
+          ─────────────────┴─┬────────── Додаємо 9 до результату: 331.529
+                    52215900 │              522159 00
+-                   46414109 │ 7            (331529 × 2 × 10 + 7) × 7 = 46414109
+            ─────────────────┴─┬─────────── Додаємо 7 до результату: 331.5297
+                     580179100 │               5801791 00
+-                    530447584 │ 8             (3315297 × 2 × 10 + 8) × 8 = 530447584
+              ─────────────────┴─┬──────────── Додаємо 8 до результату: 331.52978
+                      4973151600 │                49731516 00
+-                     4641416969 │ 7              (33152978 × 2 × 10 + 7) × 7 = 4641416969
+                ─────────────────┴─┬───────────── Додаємо 7 до результату: 331.529787
+                       33173463100 │                 331734631 00
+-                      33152978725 │ 5               (331529787 × 2 × 10 + 5) × 5 = 33152978725
+                  ─────────────────┴─┬────────────── Додаємо 5 до результату: 331.5297875
+                          2048437500 │                20484375 00
+-                                  0 │ 0              (3315297875 × 2 × 10 + 0) × 0 = 0
+                    ─────────────────┴─┬───────────── Додаємо 0 до результату: 331.52978750
+                          204843750000 │                  2048437500 00
+-                                    0 │ 0                (33152978750 × 2 × 10 + 0) × 0 = 0
+                      ─────────────────┴─┬─────────────── Додаємо 0 до результату: 331.529787500
+                          20484375000000 │                    204843750000 00
+-                         19891787250009 │ 3                  (331529787500 × 2 × 10 + 3) × 3 = 19891787250009
+                        ─────────────────┴─┬───────────────── Додаємо 3 до результату: 331.5297875003
+  Стовпчиком з візуалізацією √109912 ≈ 331.5297875003
+```
+### Про квадратний корінь стовпчиком
+#### Теорія: Як працює корінь стовпчиком?
+Цей метод базується на формулі квадрата суми: _(10a + b)² = 100a² + 20ab + b² = 100a² + (20a + b)_
+##### Алгоритм кроками:
+1. Розбиваємо число на пари з кінця (наприклад, 100500 → 10 05 00 → 10, 05, 00).
+2. Шукаємо першу цифру: найбільше число, квадрат якого ⩽ першій парі.
+3. Знаходимо залишок (як при діленні).
+4. Зносимо наступну пару цифр.
+5. Подвоюємо вже знайдений корінь і дописуємо до нього таку цифру x,
+щоб добуток _(20 × корінь + x) × x_ був максимально близьким до залишку, але не більшим за нього.
+##### Чому саме 20?
+Це випливає з формули квадрата суми: _(a + b)² = a² + 2ab + b²_. Коли
+ми шукаємо наступну цифру, ми розглядаємо наше число як 
+_(10a + x)² = 100a² + 20ax + x² = 100a² + 20ax + x²_
+* _100a²_ ми віднімаємо на попередніх кроках.
+* Залишається _20ax + x²_, що можна записати як _(20a + x) × x_
+Де:
+* _a_ — це вже знайдена частина кореня.
+* _x_ — наступна цифра.
+Отже, щоб отримати ліве число в дужках:
+1. Беремо весь корінь, що вже написаний зверху (ігноруючи кому).
+2. Множимо його на 2.
+3. Дописуємо 0 в кінці (це і є множення на 20).
+4. Шукаємо таку цифру x, яку можна і додати, і помножити.
+## Ліричний відступ
+Проект не ставив на меті переписування функціоналу 
+BigInteger або BigDecimal. Перша спроба реалізації
+додання одного числа до іншого "в стовпчик" була
+чи то на міській, чи то на обласній олімпіаді з
+інформатики, яка відбулася в Херсоні або 1990, або
+на початку 1991 року. Тоді, пам'ятаю, це був MSX Basic
+на Yamaha. До кінця так і не вдалося якісно реалізувати
+у стислий час, який відводився. Тому потім вже спробував
+на КУВТ "Корвет"… о, був такий "динозавр". Ну, а потім
+задачу було забуто і "закинуто в шухлядку". Час від
+часу був згадував як то все було, але до практичної
+реалізації якось не доходило.
+А тут вихідними днями, якось з'явився й час, й натхнення
+то взяв і реалізував.
+## TODO
+Знаю, що існує алгоритм розрахунку в стовпчик кубічного
+кореню. Можливо якось дійдуть руки й до його реалізації
+і візуалізації.
+А поки
+```bash
+mvn -q exec:java
+```
