@@ -4,10 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-
 import static org.junit.jupiter.api.Assertions.*;
+import ua.org.olden.stringnumeric.StringNumericRecord;
 
 class StringNumericTest {
 
@@ -69,49 +67,27 @@ class StringNumericTest {
     // ── add visualization ─────────────────────────────────────────────────────
     @Test
     void testAddVisualizationWithCarry() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        StringNumeric result = new StringNumeric("29").add(new StringNumeric("12"), true);
-        System.setOut(original);
-
-        assertEquals("41", result.toString());
-        assertEquals(" 1\n 29\n+12\n ──\n 41", buf.toString().stripTrailing());
+        StringNumericRecord rec = new StringNumeric("29").add(new StringNumeric("12"), true);
+        assertEquals("41", rec.value().toString());
+        assertEquals(" 1\n 29\n+12\n ──\n 41", rec.visualize().stripTrailing());
     }
 
     @Test
     void testAddVisualizationWithChainedCarry() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        StringNumeric result = new StringNumeric("99").add(new StringNumeric("1"), true);
-        System.setOut(original);
-
-        assertEquals("100", result.toString());
-        assertEquals(" 11\n  99\n+  1\n ───\n 100", buf.toString().stripTrailing());
+        StringNumericRecord rec = new StringNumeric("99").add(new StringNumeric("1"), true);
+        assertEquals("100", rec.value().toString());
+        assertEquals(" 11\n  99\n+  1\n ───\n 100", rec.visualize().stripTrailing());
     }
 
     @Test
     void testAddVisualizationNoCarry() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        new StringNumeric("10").add(new StringNumeric("20"), true);
-        System.setOut(original);
-
-        assertEquals(" 10\n+20\n ──\n 30", buf.toString().stripTrailing());
+        StringNumericRecord rec = new StringNumeric("10").add(new StringNumeric("20"), true);
+        assertEquals(" 10\n+20\n ──\n 30", rec.visualize().stripTrailing());
     }
 
     @Test
     void testAddWithoutVisualizationProducesNoOutput() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        new StringNumeric("29").add(new StringNumeric("12"));
-        new StringNumeric("29").add(new StringNumeric("12"), false);
-        System.setOut(original);
-
-        assertTrue(buf.toString().isEmpty());
+        assertNull(new StringNumeric("29").add(new StringNumeric("12"), false).visualize());
     }
 
     // ── sub (positive) ────────────────────────────────────────────────────────
@@ -171,49 +147,27 @@ class StringNumericTest {
     // ── sub visualization ─────────────────────────────────────────────────────
     @Test
     void testSubVisualizationWithBorrow() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        StringNumeric result = new StringNumeric("52").sub(new StringNumeric("27"), true);
-        System.setOut(original);
-
-        assertEquals("25", result.toString());
-        assertEquals(" 1\n 52\n-27\n ──\n 25", buf.toString().stripTrailing());
+        StringNumericRecord rec = new StringNumeric("52").sub(new StringNumeric("27"), true);
+        assertEquals("25", rec.value().toString());
+        assertEquals(" 1\n 52\n-27\n ──\n 25", rec.visualize().stripTrailing());
     }
 
     @Test
     void testSubVisualizationWithChainedBorrow() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        StringNumeric result = new StringNumeric("100").sub(new StringNumeric("1"), true);
-        System.setOut(original);
-
-        assertEquals("99", result.toString());
-        assertEquals(" 11\n 100\n-  1\n ───\n  99", buf.toString().stripTrailing());
+        StringNumericRecord rec = new StringNumeric("100").sub(new StringNumeric("1"), true);
+        assertEquals("99", rec.value().toString());
+        assertEquals(" 11\n 100\n-  1\n ───\n  99", rec.visualize().stripTrailing());
     }
 
     @Test
     void testSubVisualizationNoBorrow() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        new StringNumeric("30").sub(new StringNumeric("20"), true);
-        System.setOut(original);
-
-        assertEquals(" 30\n-20\n ──\n 10", buf.toString().stripTrailing());
+        StringNumericRecord rec = new StringNumeric("30").sub(new StringNumeric("20"), true);
+        assertEquals(" 30\n-20\n ──\n 10", rec.visualize().stripTrailing());
     }
 
     @Test
     void testSubWithoutVisualizationProducesNoOutput() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        new StringNumeric("52").sub(new StringNumeric("27"));
-        new StringNumeric("52").sub(new StringNumeric("27"), false);
-        System.setOut(original);
-
-        assertTrue(buf.toString().isEmpty());
+        assertNull(new StringNumeric("52").sub(new StringNumeric("27"), false).visualize());
     }
 
     @Test
@@ -272,26 +226,14 @@ class StringNumericTest {
     // ── mul visualization ────────────────────────────────────────────────────
     @Test
     void testMulVisualization() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        new StringNumeric("29").mul(new StringNumeric("12"), true);
-        System.setOut(original);
-
-        assertEquals("    29\n×   12\n──────\n    58\n   29 \n──────\n   348", buf.toString().stripTrailing());
+        StringNumericRecord rec = new StringNumeric("29").mul(new StringNumeric("12"), true);
+        assertEquals("348", rec.value().toString());
+        assertEquals("    29\n×   12\n──────\n    58\n   29 \n──────\n   348", rec.visualize().stripTrailing());
     }
 
     @Test
     void testMulWithoutVisualizationProducesNoOutput() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-
-        new StringNumeric("29").mul(new StringNumeric("12"), false);
-        new StringNumeric("29").mul(new StringNumeric("12"));
-
-        System.setOut(original);
-        assertTrue(buf.toString().isEmpty());
+        assertNull(new StringNumeric("29").mul(new StringNumeric("12"), false).visualize());
     }
 
     // ── div (positive) ───────────────────────────────────────────────────────
@@ -352,29 +294,19 @@ class StringNumericTest {
     // ── div visualization ────────────────────────────────────────────────────
     @Test
     void testDivVisualization() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        new StringNumeric("100").div(new StringNumeric("4"), true);
-        System.setOut(original);
-
-        String out = buf.toString().stripTrailing();
-        assertTrue(out.contains("100"), "should contain dividend");
-        assertTrue(out.contains("4"), "should contain divisor");
-        assertTrue(out.contains("25"), "should contain quotient");
-        assertTrue(out.contains("-8"), "should show first subtraction");
-        assertTrue(out.contains("-20"), "should show second subtraction");
+        StringNumericRecord rec = new StringNumeric("100").div(new StringNumeric("4"), 10, true);
+        assertEquals("25", rec.value().toString());
+        String vis = rec.visualize();
+        assertTrue(vis.contains("100"), "should contain dividend");
+        assertTrue(vis.contains("4"), "should contain divisor");
+        assertTrue(vis.contains("25"), "should contain quotient");
+        assertTrue(vis.contains("-8"), "should show first subtraction");
+        assertTrue(vis.contains("-20"), "should show second subtraction");
     }
 
     @Test
     void testDivWithoutVisualizationProducesNoOutput() {
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        new StringNumeric("100").div(new StringNumeric("4"));
-        new StringNumeric("100").div(new StringNumeric("4"), false);
-        System.setOut(original);
-        assertTrue(buf.toString().isEmpty());
+        assertNull(new StringNumeric("100").div(new StringNumeric("4"), 10, false).visualize());
     }
 
     @Test
@@ -390,14 +322,9 @@ class StringNumericTest {
     @Test
     void testDivVisualizationDividendSmallerThanDivisor() {
         // Перевірка що візуалізація не падає і містить правильний результат
-        PrintStream original = System.out;
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        System.setOut(new PrintStream(buf));
-        new StringNumeric("4").div(new StringNumeric("8"), true);
-        System.setOut(original);
-        String out = buf.toString();
-        assertFalse(out.isEmpty(), "visualize=true should produce output");
-        assertTrue(out.contains("0.5"), "should contain quotient 0.5");
+        StringNumericRecord rec = new StringNumeric("4").div(new StringNumeric("8"), 10, true);
+        assertNotNull(rec.visualize(), "visualize=true should produce output");
+        assertTrue(rec.visualize().contains("0.5"), "should contain quotient 0.5");
     }
 
     // ── constructors ──────────────────────────────────────────────────────────
