@@ -207,8 +207,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             StringNumericRecord magRec = addMagnitudes(this, other, visualize);
             StringNumeric mag = magRec.value();
             StringNumeric result = (this.negative && !mag.isZero())
-                    ? new StringNumeric(mag.digits, mag.scale, true)
-                    : mag;
+                                   ? new StringNumeric(mag.digits, mag.scale, true)
+                                   : mag;
             return new StringNumericRecord(result, magRec.visualize());
         }
         int cmp = compareMagnitudes(this, other);
@@ -220,8 +220,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         StringNumericRecord magRec = subMagnitudes(larger, smaller, visualize);
         StringNumeric mag = magRec.value();
         StringNumeric result = (larger.negative && !mag.isZero())
-                ? new StringNumeric(mag.digits, mag.scale, true)
-                : mag;
+                               ? new StringNumeric(mag.digits, mag.scale, true)
+                               : mag;
         return new StringNumericRecord(result, magRec.visualize());
     }
 
@@ -277,7 +277,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
 
     /**
      * Множить це значення на {@code other}. Якщо {@code visualize == true} —
-     * рядок шкільного запису доступний через {@link StringNumericRecord#visualize()}.
+     * рядок шкільного запису доступний через
+     * {@link StringNumericRecord#visualize()}.
      *
      * @param other
      * @param visualize
@@ -292,8 +293,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         StringNumericRecord magRec = multiplyMagnitudes(this, other, visualize);
         StringNumeric mag = magRec.value();
         StringNumeric result = (resultNegative && !mag.isZero())
-               ? new StringNumeric(mag.digits, mag.scale, true)
-               : mag;
+                               ? new StringNumeric(mag.digits, mag.scale, true)
+                               : mag;
         return new StringNumericRecord(result, magRec.visualize());
     }
 
