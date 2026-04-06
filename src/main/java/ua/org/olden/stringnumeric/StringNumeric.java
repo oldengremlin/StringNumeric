@@ -1325,7 +1325,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                         .append(subtracted);
                 if (i == 0) {
                     sb
-                            .append(" ".repeat(d1.length() - window.length()))
+                            .append(" ".repeat(Math.max(0, d1.length() - window.length())))
                             .append(" ├") // ╰
                             .append("─".repeat(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", "").length() + 2));
                 }
@@ -1335,7 +1335,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 sb.append(indent).append("─".repeat(Math.max(subtracted.length(), window.length()) + 1));
                 if (i == 0) {
                     sb
-                            .append(" ".repeat(d1.length() - window.length() + 1))
+                            .append(" ".repeat(Math.max(0, d1.length() - window.length() + 1)))
                             .append("│ ")
                             .append(cleanQuotient.replaceAll("0+$", "").replaceAll("\\.$", ""));
                 }

@@ -377,6 +377,29 @@ class StringNumericTest {
         assertTrue(buf.toString().isEmpty());
     }
 
+    @Test
+    void testDivDividendSmallerThanDivisor() {
+        // 4 / 8 = 0.5 — перший крок: 4 < 8, вікно розширюється до 40
+        // Раніше падало з IllegalArgumentException ("repeat count is negative")
+        // у buildDivVisualization через від'ємний " ".repeat(d1.length()-window.length())
+        assertEquals("0.5", new StringNumeric("4").div(new StringNumeric("8")).toString());
+        assertEquals("0.5", new StringNumeric("1").div(new StringNumeric("2")).toString());
+        assertEquals("0.25", new StringNumeric("1").div(new StringNumeric("4")).toString());
+    }
+
+    @Test
+    void testDivVisualizationDividendSmallerThanDivisor() {
+        // Перевірка що візуалізація не падає і містить правильний результат
+        PrintStream original = System.out;
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        System.setOut(new PrintStream(buf));
+        new StringNumeric("4").div(new StringNumeric("8"), true);
+        System.setOut(original);
+        String out = buf.toString();
+        assertFalse(out.isEmpty(), "visualize=true should produce output");
+        assertTrue(out.contains("0.5"), "should contain quotient 0.5");
+    }
+
     // ── constructors ──────────────────────────────────────────────────────────
     @Test
     void testConstructorStripsLeadingZeros() {
