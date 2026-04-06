@@ -194,34 +194,35 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     // --- додавання ---
-    /**
-     * Додає {@code other} до цього значення. Результат може бути від'ємним.
-     * Якщо {@code visualize == true} — виводить шкільний запис операції до
-     * {@code System.out}.
-     *
-     * @param other
-     * @param visualize
-     * @return
-     */
-    public StringNumeric add(StringNumeric other, boolean visualize) {
-        if (this.negative == other.negative) {
-            // same sign: add magnitudes, keep sign
-            StringNumeric mag = addMagnitudes(this, other, visualize);
-            return (this.negative && !mag.isZero())
-                   ? new StringNumeric(mag.digits, mag.scale, true)
-                   : mag;
+    protected StringNumeric Add(StringNumeric other, boolean visualize) {
+        StringNumericRecord rec = add(other, visualize);
+        if (visualize && rec.visualize() != null) {
+            System.out.println(rec.visualize());
         }
-        // different signs: subtract smaller magnitude from larger
+        return rec.value();
+    }
+
+    public StringNumericRecord add(StringNumeric other, boolean visualize) {
+        if (this.negative == other.negative) {
+            StringNumericRecord magRec = addMagnitudes(this, other, visualize);
+            StringNumeric mag = magRec.value();
+            StringNumeric result = (this.negative && !mag.isZero())
+                    ? new StringNumeric(mag.digits, mag.scale, true)
+                    : mag;
+            return new StringNumericRecord(result, magRec.visualize());
+        }
         int cmp = compareMagnitudes(this, other);
         if (cmp == 0) {
-            return new StringNumeric("0", 0, false);
+            return new StringNumericRecord(new StringNumeric("0", 0, false), null);
         }
         StringNumeric larger = cmp > 0 ? this : other;
         StringNumeric smaller = cmp > 0 ? other : this;
-        StringNumeric mag = subMagnitudes(larger, smaller, visualize);
-        return (larger.negative && !mag.isZero())
-               ? new StringNumeric(mag.digits, mag.scale, true)
-               : mag;
+        StringNumericRecord magRec = subMagnitudes(larger, smaller, visualize);
+        StringNumeric mag = magRec.value();
+        StringNumeric result = (larger.negative && !mag.isZero())
+                ? new StringNumeric(mag.digits, mag.scale, true)
+                : mag;
+        return new StringNumericRecord(result, magRec.visualize());
     }
 
     /**
@@ -231,12 +232,19 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric add(StringNumeric other) {
-        return add(other, false);
+        return Add(other, false);
     }
 
     // --- віднімання ---
+    protected StringNumeric Sub(StringNumeric other, boolean visualize) {
+        StringNumericRecord rec = sub(other, visualize);
+        if (visualize && rec.visualize() != null) {
+            System.out.println(rec.visualize());
+        }
+        return rec.value();
+    }
+
     /**
-     * Віднімає {@code other} від цього значення. Результат може бути від'ємним.
      * Делегує до {@code add(other.negate(), visualize)}, тому візуалізація
      * показує фактичну операцію над модулями (додавання або віднімання).
      *
@@ -244,7 +252,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @param visualize
      * @return
      */
-    public StringNumeric sub(StringNumeric other, boolean visualize) {
+    public StringNumericRecord sub(StringNumeric other, boolean visualize) {
         return add(other.negate(), visualize);
     }
 
@@ -255,29 +263,38 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric sub(StringNumeric other) {
-        return sub(other, false);
+        return Sub(other, false);
     }
 
     // --- множення ---
+    protected StringNumeric Mul(StringNumeric other, boolean visualize) {
+        StringNumericRecord rec = mul(other, visualize);
+        if (visualize && rec.visualize() != null) {
+            System.out.println(rec.visualize());
+        }
+        return rec.value();
+    }
+
     /**
      * Множить це значення на {@code other}. Якщо {@code visualize == true} —
-     * виводить шкільний запис множення стовпчиком до {@code System.out}.
+     * рядок шкільного запису доступний через {@link StringNumericRecord#visualize()}.
      *
      * @param other
      * @param visualize
      * @return
      */
-    public StringNumeric mul(StringNumeric other, boolean visualize) {
+    public StringNumericRecord mul(StringNumeric other, boolean visualize) {
         if (this.isZero() || other.isZero()) {
-            return new StringNumeric("0", 0, false);
+            return new StringNumericRecord(new StringNumeric("0", 0, false), null);
         }
 
         boolean resultNegative = this.negative != other.negative;
-        StringNumeric mag = MultiplyMagnitudes(this, other, visualize);
-
-        return (resultNegative && !mag.isZero())
+        StringNumericRecord magRec = multiplyMagnitudes(this, other, visualize);
+        StringNumeric mag = magRec.value();
+        StringNumeric result = (resultNegative && !mag.isZero())
                ? new StringNumeric(mag.digits, mag.scale, true)
                : mag;
+        return new StringNumericRecord(result, magRec.visualize());
     }
 
     /**
@@ -287,7 +304,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric mul(StringNumeric other) {
-        return mul(other, false);
+        return Mul(other, false);
     }
 
     // --- ділення ---
@@ -888,8 +905,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     /**
      * Складає модулі двох чисел. Передумова: обидва ненегативні.
      */
-    private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
-        return Magnitudes(a, b, visualize,
+    private static StringNumericRecord addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        return magnitudes(a, b, visualize,
                 (da, db, cin) -> {
                     int sum = da + db + cin;
                     return new ColumnResult(sum % 10, sum / 10);
@@ -901,9 +918,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * Віднімає модуль {@code b} від модуля {@code a}. Передумова:
      * {@code |a| >= |b|} — гарантується викликачем ({@code add()}).
      */
-    private static StringNumeric subMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+    private static StringNumericRecord subMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         // precondition: |a| >= |b| вже гарантується в add()
-        return Magnitudes(a, b, visualize,
+        return magnitudes(a, b, visualize,
                 (da, db, bin) -> {
                     int diff = da - db - bin;
                     if (diff < 0) {
