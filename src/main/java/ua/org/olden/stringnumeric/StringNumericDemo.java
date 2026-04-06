@@ -262,7 +262,7 @@ public class StringNumericDemo {
     private static void sqrt(String a) {
         StringNumeric na = new StringNumeric(a);
         System.out.printf("  Табличний √%s ≈ %s%n", a, na.sqrtApproximate());
-        System.out.printf("  Табличний з візуалізацією √%s ≈ %s%n", a, na.sqrtApproximate(true));
+        System.out.printf("  Табличний з візуалізацією √%s ≈ %s%n", a, na.SqrtApproximate(true));
         System.out.printf("  Інтерактивний √%s ≈ %s%n", a, na.sqrtIterative());
         System.out.printf("  Інтерактивний з візуалізацією √%s ≈ %s%n", a, na.sqrtIterative(true));
         System.out.printf("  Стовпчиком √%s ≈ %s%n", a, na.sqrtLongDivision());

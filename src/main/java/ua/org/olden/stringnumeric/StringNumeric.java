@@ -273,7 +273,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
 
         boolean resultNegative = this.negative != other.negative;
-        StringNumeric mag = multiplyMagnitudes(this, other, visualize);
+        StringNumeric mag = MultiplyMagnitudes(this, other, visualize);
 
         return (resultNegative && !mag.isZero())
                ? new StringNumeric(mag.digits, mag.scale, true)
@@ -302,21 +302,39 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      * @throws ArithmeticException якщо {@code other} дорівнює нулю
      */
-    public StringNumeric div(StringNumeric other, int precision, boolean visualize) {
+    protected StringNumeric Div(StringNumeric other, int precision, boolean visualize) {
+        StringNumericRecord recordDiv = div(other, precision, visualize);
+        if (visualize) {
+            System.out.println(recordDiv.visualize());
+        }
+        return recordDiv.value();
+    }
+
+    public StringNumericRecord div(StringNumeric other, int precision, boolean visualize) {
         if (other.isZero()) {
             throw new ArithmeticException("Division by zero");
         }
         if (this.isZero()) {
-            return new StringNumeric("0", 0, false);
+            return new StringNumericRecord(
+                    new StringNumeric("0", 0, false),
+                    null
+            );
         }
 
         boolean resultNegative = this.negative != other.negative;
 
-        StringNumeric mag = divideMagnitudes(this, other, precision, visualize);
+        StringNumericRecord divideMagnitudes = divideMagnitudes(this, other, precision, visualize);
+        StringNumeric mag = divideMagnitudes.value();
 
         return (resultNegative && !mag.isZero())
-               ? new StringNumeric(mag.digits, mag.scale, true)
-               : mag;
+               ? new StringNumericRecord(
+                        new StringNumeric(mag.digits, mag.scale, true),
+                        divideMagnitudes.visualize()
+                )
+               : new StringNumericRecord(
+                        mag,
+                        divideMagnitudes.visualize()
+                );
     }
 
     /**
@@ -326,7 +344,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric div(StringNumeric other) {
-        return div(other, 10, false);
+        return Div(other, 10, false);
     }
 
     /**
@@ -338,7 +356,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric div(StringNumeric other, int precision) {
-        return div(other, precision, false);
+        return Div(other, precision, false);
     }
 
     /**
@@ -350,7 +368,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric div(StringNumeric other, boolean visualize) {
-        return div(other, 10, visualize);
+        return Div(other, 10, visualize);
     }
 
     // -- квадрати --
@@ -401,13 +419,22 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric sqrtApproximate() {
-        return sqrtApproximate(false);
+        return SqrtApproximate(false);
     }
 
-    public StringNumeric sqrtApproximate(boolean visualize) {
+    protected StringNumeric SqrtApproximate(boolean visualize) {
+        StringNumericRecord snr = sqrtApproximate(visualize);
+        if (visualize) {
+            System.out.println(snr.visualize());
+        }
+        return snr.value();
+    }
+
+    public StringNumericRecord sqrtApproximate(boolean visualize) {
         if (this.negative) {
             throw new IllegalArgumentException("Неможливо знайти корінь з від'ємного числа");
         }
+
         // Для дробових чисел беремо цілу частину як наближення —
         // достатньо для початкового наближення методу Герона
         BigInteger target = scale == 0
@@ -442,11 +469,19 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             }
         }
 
+        StringNumeric stringNumeric = new StringNumeric(String.valueOf(bestR) + bestC);
         if (visualize) {
-            System.out.println(buildSqrtVisualization(target, table, bestR, bestC));
+            String buildSqrtVisualization = buildSqrtVisualization(target, table, bestR, bestC);
+            return new StringNumericRecord(
+                    stringNumeric,
+                    buildSqrtVisualization
+            );
         }
 
-        return new StringNumeric(String.valueOf(bestR) + bestC);
+        return new StringNumericRecord(
+                stringNumeric,
+                null
+        );
     }
 
     /**
@@ -456,7 +491,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric sqrtIterative() {
-        return sqrtIterative(10, false);
+        return SqrtIterative(10, false);
     }
 
     /**
@@ -467,11 +502,11 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric sqrtIterative(boolean visualize) {
-        return sqrtIterative(10, visualize);
+        return SqrtIterative(10, visualize);
     }
 
     public StringNumeric sqrtHeron(boolean visualize) {
-        return sqrtIterative(10, visualize);
+        return SqrtIterative(10, visualize);
     }
 
     /**
@@ -482,11 +517,11 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric sqrtIterative(int precision) {
-        return sqrtIterative(precision, false);
+        return SqrtIterative(precision, false);
     }
 
     public StringNumeric sqrtHeron(int precision) {
-        return sqrtIterative(precision, false);
+        return SqrtIterative(precision, false);
     }
 
     /**
@@ -497,17 +532,31 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @param visualize
      * @return
      */
-    public StringNumeric sqrtIterative(int precision, boolean visualize) {
+    protected StringNumeric SqrtIterative(int precision, boolean visualize) {
+        StringNumericRecord recordSqrtIterative = sqrtIterative(precision, visualize);
+        if (visualize) {
+            System.out.println(recordSqrtIterative.visualize());
+        }
+        return recordSqrtIterative.value();
+    }
+
+    public StringNumericRecord sqrtIterative(int precision, boolean visualize) {
         if (this.negative) {
             throw new IllegalArgumentException("Корінь з від'ємного числа не підтримується");
         }
+
+        StringBuilder resultVisualize = new StringBuilder();
+
         if (this.isZero()) {
-            return new StringNumeric("0");
+            return new StringNumericRecord(
+                    new StringNumeric("0"),
+                    null
+            );
         }
 
         // 1. Початкове наближення (x0).
         // Можна взяти результат табличного методу як чудовий старт!
-        StringNumeric x = this.sqrtApproximate(false);
+        StringNumeric x = this.SqrtApproximate(false);
         // Для чисел між 0 і 1 (наприклад 0.25) sqrtApproximate повертає 0
         // (ціла частина = 0) — це призведе до ділення на нуль у Героні.
         // Використовуємо 1 як безпечне початкове наближення; Герон сходиться
@@ -518,7 +567,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         StringNumeric two = new StringNumeric("2");
 
         if (visualize) {
-            System.out.println("Початкове наближення: " + x);
+            resultVisualize.append("Початкове наближення: " + x + "\n");
         }
 
         // 2. Ітераційний процес (зазвичай 6-10 ітерацій достатньо для високої точності)
@@ -529,15 +578,18 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             x = step2.div(two, precision);                // сума / 2
 
             if (visualize) {
-                System.out.printf("Ітерація %d: %s%n", i + 1, x);
+                resultVisualize.append("Ітерація " + (i + 1) + ": " + x + "\n");
             }
         }
 
-        return x;
+        return new StringNumericRecord(
+                x,
+                resultVisualize.toString()
+        );
     }
 
     public StringNumeric sqrtHeron(int precision, boolean visualize) {
-        return sqrtIterative(precision, visualize);
+        return SqrtIterative(precision, visualize);
     }
 
     /**
@@ -546,7 +598,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric sqrtLongDivision() {
-        return sqrtLongDivision(10, false);
+        return SqrtLongDivision(10, false);
     }
 
     /**
@@ -556,7 +608,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric sqrtLongDivision(int precision) {
-        return sqrtLongDivision(precision, false);
+        return SqrtLongDivision(precision, false);
     }
 
     /**
@@ -566,7 +618,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @return
      */
     public StringNumeric sqrtLongDivision(boolean visualize) {
-        return sqrtLongDivision(10, visualize);
+        return SqrtLongDivision(10, visualize);
     }
 
     /**
@@ -577,7 +629,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @param visualize
      * @return
      */
-    public StringNumeric sqrtLongDivision(int precision, boolean visualize) {
+    protected StringNumeric SqrtLongDivision(int precision, boolean visualize) {
+        StringNumericRecord recordSqrtLongDivision = sqrtLongDivision(precision, visualize);
+        if (visualize) {
+            System.out.println(recordSqrtLongDivision.visualize());
+        }
+        return recordSqrtLongDivision.value();
+    }
+
+    public StringNumericRecord sqrtLongDivision(int precision, boolean visualize) {
         if (this.negative) {
             throw new IllegalArgumentException("Корінь з від'ємного числа неможливий");
         }
@@ -671,10 +731,16 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         }
 
         if (visualize) {
-            System.out.println(visualLog.toString());
+            return new StringNumericRecord(
+                    new StringNumeric(resRoot.toString()),
+                    visualLog.toString()
+            );
         }
 
-        return new StringNumeric(resRoot.toString());
+        return new StringNumericRecord(
+                new StringNumeric(resRoot.toString()),
+                null
+        );
     }
 
     private void buildClassicSqrtStep(StringBuilder sb, int step,
@@ -741,7 +807,20 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * @param isAddition {@code true} — будує візуалізацію додавання,
      * {@code false} — віднімання
      */
-    private static StringNumeric magnitudes(
+    private static StringNumeric Magnitudes(
+            StringNumeric a,
+            StringNumeric b,
+            boolean visualize,
+            ColumnOperation operation,
+            boolean isAddition) {   // для вибору візуалізації
+        StringNumericRecord recordMagnitudes = magnitudes(a, b, visualize, operation, isAddition);
+        if (visualize) {
+            System.out.println(recordMagnitudes.visualize());
+        }
+        return recordMagnitudes.value();
+    }
+
+    private static StringNumericRecord magnitudes(
             StringNumeric a,
             StringNumeric b,
             boolean visualize,
@@ -787,21 +866,30 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         // === візуалізація ===
         if (visualize) {
             if (isAddition) {
-                System.out.println(buildAddVisualization(as, bs, resultStr, transfer, maxLen, maxScale));
+                return new StringNumericRecord(
+                        normalize(resultStr, maxScale),
+                        buildAddVisualization(as, bs, resultStr, transfer, maxLen, maxScale)
+                );
             } else {
-                System.out.println(buildSubVisualization(as, bs, resultStr, transfer, maxLen, maxScale));
+                return new StringNumericRecord(
+                        normalize(resultStr, maxScale),
+                        buildSubVisualization(as, bs, resultStr, transfer, maxLen, maxScale)
+                );
                 // transfer тут виконує роль incomingBorrow — значення ті самі (0/1)
             }
         }
 
-        return normalize(resultStr, maxScale);
+        return new StringNumericRecord(
+                normalize(resultStr, maxScale),
+                null
+        );
     }
 
     /**
      * Складає модулі двох чисел. Передумова: обидва ненегативні.
      */
     private static StringNumeric addMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
-        return magnitudes(a, b, visualize,
+        return Magnitudes(a, b, visualize,
                 (da, db, cin) -> {
                     int sum = da + db + cin;
                     return new ColumnResult(sum % 10, sum / 10);
@@ -815,7 +903,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      */
     private static StringNumeric subMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         // precondition: |a| >= |b| вже гарантується в add()
-        return magnitudes(a, b, visualize,
+        return Magnitudes(a, b, visualize,
                 (da, db, bin) -> {
                     int diff = da - db - bin;
                     if (diff < 0) {
@@ -832,12 +920,27 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * обчислюється частковий добуток, потім усі часткові добутки
      * підсумовуються.
      */
-    private static StringNumeric multiplyMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+    private static StringNumeric MultiplyMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
+        StringNumericRecord recordMultiplyMagnitudes = multiplyMagnitudes(a, b, visualize);
+        if (visualize) {
+            System.out.println(recordMultiplyMagnitudes.visualize());
+        }
+        return recordMultiplyMagnitudes.value();
+    }
+
+    private static StringNumericRecord multiplyMagnitudes(StringNumeric a, StringNumeric b, boolean visualize) {
         if (a.isZero() || b.isZero()) {
             if (visualize) {
-                System.out.println(buildMulVisualization(a.toString(), b.toString(), "0", new String[0]));
+                return new StringNumericRecord(
+                        new StringNumeric("0", 0, false),
+                        buildMulVisualization(a.toString(), b.toString(), "0", new String[0])
+                );
+            } else {
+                return new StringNumericRecord(
+                        new StringNumeric("0", 0, false),
+                        null
+                );
             }
-            return new StringNumeric("0", 0, false);
         }
 
         String da = a.digits;
@@ -908,10 +1011,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 resultDisplay = "-" + resultDisplay;
             }
 
-            System.out.println(buildMulVisualization(aDisplay, bDisplay, resultDisplay, partialProducts));
+            return new StringNumericRecord(
+                    normalize(resultDigits, totalScale),
+                    buildMulVisualization(aDisplay, bDisplay, resultDisplay, partialProducts)
+            );
         }
-
-        return normalize(resultDigits, totalScale);
+        return new StringNumericRecord(
+                normalize(resultDigits, totalScale),
+                null
+        );
     }
 
     /**
@@ -930,7 +1038,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * доти, доки не набрано {@code precision} знаків після коми.</li>
      * </ol>
      */
-    private static StringNumeric divideMagnitudes(StringNumeric dividend, StringNumeric divisor, int precision, boolean visualize) {
+    private static StringNumericRecord divideMagnitudes(StringNumeric dividend, StringNumeric divisor, int precision, boolean visualize) {
         // 1. Приводимо до цілих чисел (прибираємо кому)
         // Наприклад: 4.8 / 1.2 -> 48 / 12
         int commonScale = Math.max(dividend.scale, divisor.scale);
@@ -1013,10 +1121,15 @@ public final class StringNumeric extends Number implements Comparable<StringNume
         // з використанням зібраних steps
 
         if (visualize) {
-            System.out.println(buildDivVisualization(d1Digits, d2Digits, resultStr, steps));
+            return new StringNumericRecord(
+                    new StringNumeric(resultStr),
+                    buildDivVisualization(d1Digits, d2Digits, resultStr, steps)
+            );
         }
-
-        return new StringNumeric(resultStr);
+        return new StringNumericRecord(
+                new StringNumeric(resultStr),
+                null
+        );
     }
 
     // -- візуалізація --
@@ -1102,7 +1215,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                 .append(padLeft(b, dw))
                 .append('\n')
                 .append(' ')
-                .repeat("-", dw)
+                .repeat("─", dw)
                 .append('\n')
                 .append(' ')
                 .append(padLeft(result, dw));

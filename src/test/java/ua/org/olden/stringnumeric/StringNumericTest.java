@@ -76,7 +76,7 @@ class StringNumericTest {
         System.setOut(original);
 
         assertEquals("41", result.toString());
-        assertEquals(" 1\n 29\n+12\n --\n 41", buf.toString().stripTrailing());
+        assertEquals(" 1\n 29\n+12\n ──\n 41", buf.toString().stripTrailing());
     }
 
     @Test
@@ -88,7 +88,7 @@ class StringNumericTest {
         System.setOut(original);
 
         assertEquals("100", result.toString());
-        assertEquals(" 11\n  99\n+  1\n ---\n 100", buf.toString().stripTrailing());
+        assertEquals(" 11\n  99\n+  1\n ───\n 100", buf.toString().stripTrailing());
     }
 
     @Test
@@ -99,7 +99,7 @@ class StringNumericTest {
         new StringNumeric("10").add(new StringNumeric("20"), true);
         System.setOut(original);
 
-        assertEquals(" 10\n+20\n --\n 30", buf.toString().stripTrailing());
+        assertEquals(" 10\n+20\n ──\n 30", buf.toString().stripTrailing());
     }
 
     @Test
@@ -178,7 +178,7 @@ class StringNumericTest {
         System.setOut(original);
 
         assertEquals("25", result.toString());
-        assertEquals(" 1\n 52\n-27\n --\n 25", buf.toString().stripTrailing());
+        assertEquals(" 1\n 52\n-27\n ──\n 25", buf.toString().stripTrailing());
     }
 
     @Test
@@ -190,7 +190,7 @@ class StringNumericTest {
         System.setOut(original);
 
         assertEquals("99", result.toString());
-        assertEquals(" 11\n 100\n-  1\n ---\n  99", buf.toString().stripTrailing());
+        assertEquals(" 11\n 100\n-  1\n ───\n  99", buf.toString().stripTrailing());
     }
 
     @Test
@@ -201,7 +201,7 @@ class StringNumericTest {
         new StringNumeric("30").sub(new StringNumeric("20"), true);
         System.setOut(original);
 
-        assertEquals(" 30\n-20\n --\n 10", buf.toString().stripTrailing());
+        assertEquals(" 30\n-20\n ──\n 10", buf.toString().stripTrailing());
     }
 
     @Test
@@ -506,10 +506,10 @@ class StringNumericTest {
     // ── toBigInteger ──────────────────────────────────────────────────────────
     @Test
     void testToBigInteger() {
-        assertEquals("5",  new StringNumeric("5").toBigInteger().toString());
-        assertEquals("3",  new StringNumeric("3.7").toBigInteger().toString());  // truncates
-        assertEquals("2",  new StringNumeric("2.25").toBigInteger().toString()); // truncates
-        assertEquals("0",  new StringNumeric("0.99").toBigInteger().toString()); // < 1 → 0
+        assertEquals("5", new StringNumeric("5").toBigInteger().toString());
+        assertEquals("3", new StringNumeric("3.7").toBigInteger().toString());  // truncates
+        assertEquals("2", new StringNumeric("2.25").toBigInteger().toString()); // truncates
+        assertEquals("0", new StringNumeric("0.99").toBigInteger().toString()); // < 1 → 0
         assertEquals("-5", new StringNumeric("-5.9").toBigInteger().toString()); // negative
     }
 
@@ -543,8 +543,7 @@ class StringNumericTest {
         "9,   0,  3",
         "100, 0,  10",
         "1,   0,  1",
-        "0,   0,  0",
-    })
+        "0,   0,  0",})
     void testSqrtIterativeInteger(String a, int precision, String expected) {
         assertEquals(expected,
                 new StringNumeric(a).sqrtIterative(precision).toString());
@@ -555,8 +554,7 @@ class StringNumericTest {
         "2.25, 4, 1.5",
         "0.25, 4, 0.5",
         "6.25, 4, 2.5",
-        "0.01, 4, 0.1",
-    })
+        "0.01, 4, 0.1",})
     void testSqrtIterativeDecimal(String a, int precision, String expected) {
         assertEquals(expected,
                 new StringNumeric(a).sqrtIterative(precision).toString());
@@ -576,8 +574,7 @@ class StringNumericTest {
         "100, 0,  10",
         "25,  0,  5",
         "1,   0,  1",
-        "0,   0,  0",
-    })
+        "0,   0,  0",})
     void testSqrtLongDivisionInteger(String a, int precision, String expected) {
         assertEquals(expected,
                 new StringNumeric(a).sqrtLongDivision(precision).toString());
@@ -589,8 +586,7 @@ class StringNumericTest {
         "0.25,   0,  0.5",
         "6.25,   0,  2.5",
         "0.0025, 0,  0.05",
-        "56.25,  0,  7.5",
-    })
+        "56.25,  0,  7.5",})
     void testSqrtLongDivisionDecimal(String a, int precision, String expected) {
         assertEquals(expected,
                 new StringNumeric(a).sqrtLongDivision(precision).toString());
@@ -621,7 +617,7 @@ class StringNumericTest {
         PrintStream original = System.out;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         System.setOut(new PrintStream(buf));
-        new StringNumeric("144").sqrtLongDivision(0, true);
+        new StringNumeric("144").SqrtLongDivision(0, true);
         System.setOut(original);
         assertFalse(buf.toString().isEmpty(), "visualize=true should produce output");
     }
@@ -631,7 +627,7 @@ class StringNumericTest {
         PrintStream original = System.out;
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         System.setOut(new PrintStream(buf));
-        new StringNumeric("144").sqrtLongDivision(0, false);
+        new StringNumeric("144").SqrtLongDivision(0, false);
         new StringNumeric("144").sqrtLongDivision(0);
         System.setOut(original);
         assertTrue(buf.toString().isEmpty());
