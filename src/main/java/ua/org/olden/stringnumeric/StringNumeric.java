@@ -718,6 +718,8 @@ public final class StringNumeric extends Number implements Comparable<StringNume
             }
             StringNumeric p = new StringNumeric(currentRootWithoutDot).mul(new StringNumeric("20"));
 
+            /*
+            // Лінійно — корисно в навчальних цілях
             int x = 0;
             for (int j = 1; j <= 9; j++) {
                 StringNumeric candidateX = new StringNumeric(String.valueOf(j));
@@ -726,6 +728,21 @@ public final class StringNumeric extends Number implements Comparable<StringNume
                     x = j;
                 } else {
                     break;
+                }
+            }
+             */
+            // Бінарно — трохи-трохи швидше.
+            // Замість до 9 ітерацій — максимум ⌈log₂9⌉ = 4 ітерації.
+            int lo = 1, hi = 9, x = 0;
+            while (lo <= hi) {
+                int mid = (lo + hi) / 2;
+                StringNumeric candidate = new StringNumeric(String.valueOf(mid));
+                StringNumeric val = p.add(candidate).mul(candidate);
+                if (val.compareTo(remainder) <= 0) {
+                    x = mid;   // mid підходить — запам'ятали, шукаємо більший
+                    lo = mid + 1;
+                } else {
+                    hi = mid - 1;  // mid завеликий — шукаємо менший
                 }
             }
 
@@ -762,9 +779,9 @@ public final class StringNumeric extends Number implements Comparable<StringNume
     }
 
     private void buildClassicSqrtStep(StringBuilder sb, int step,
-            StringNumeric remainder, String p,
-            int x, StringNumeric subtrahend, String currentRoot,
-            int precision) {
+                                      StringNumeric remainder, String p,
+                                      int x, StringNumeric subtrahend, String currentRoot,
+                                      int precision) {
         // Рахуємо загальну довжину числа, що зараз у залишку (включаючи знесену пару)
         String remStr = remainder.toString();
         String subStr = subtrahend.toString();
@@ -1162,7 +1179,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * </pre>
      */
     private static String buildAddVisualization(String aRaw, String bRaw, String resultRaw,
-            int[] carryInto, int maxLen, int scale) {
+                                                int[] carryInto, int maxLen, int scale) {
         return buildVisualization(aRaw, bRaw, resultRaw, carryInto, maxLen, scale, '+', carry -> (char) ('0' + carry));
     }
 
@@ -1178,7 +1195,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * (фактично він зменшується на 1).
      */
     private static String buildSubVisualization(String aRaw, String bRaw, String resultRaw,
-            int[] incomingBorrow, int maxLen, int scale) {
+                                                int[] incomingBorrow, int maxLen, int scale) {
         return buildVisualization(aRaw, bRaw, resultRaw, incomingBorrow, maxLen, scale, '-', borrow -> '1');
     }
 
@@ -1193,7 +1210,7 @@ public final class StringNumeric extends Number implements Comparable<StringNume
      * відображення
      */
     private static String buildVisualization(String aRaw, String bRaw, String resultRaw,
-            int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
+                                             int[] marks, int maxLen, int scale, char operationSign, IntFunction<Character> markToChar) {
 
         // вставляємо десяткову крапку лише для відображення
         String a = insertDot(aRaw, scale);
